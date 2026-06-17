@@ -14,6 +14,7 @@ import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from rag import config
+from rag.analysis import analyze_paths
 from rag.indexer import ingest_paths
 from rag.ollama_client import OllamaError, chat_stream, health
 from rag.pipeline import OVERVIEW_PROMPT, SYSTEM_PROMPT, build_user_message, overview_user_message, retrieve
@@ -114,6 +115,8 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_ask()
         elif path == "/api/ingest":
             self._handle_ingest()
+        elif path == "/api/analyze":
+            self._handle_analyze()
         else:
             self._send(404, "text/plain", "Not found")
 
@@ -188,6 +191,26 @@ class Handler(BaseHTTPRequestHandler):
             self._event({"type": "error", "message": str(e)})
         except (BrokenPipeError, ConnectionResetError):
             pass
+
+    def _handle_analyze(self):
+        """Profile the docs at a path and recommend a chunk size (no embedding). Returns JSON."""
+        try:
+            path = (self._read_json().get("path") or "").strip()
+        except ValueError:
+            self._send(400, "text/plain", "Bad request")
+            return
+        if not path:
+            self._send(200, "application/json", json.dumps({"error": "Enter a file or folder path."}))
+            return
+        try:
+            result = analyze_paths([path])
+        except Exception as e:  # noqa: BLE001 - report any analysis failure to the UI
+            self._send(200, "application/json", json.dumps({"error": str(e)}))
+            return
+        rec = result.get("recommended")
+        log(f"analyze: path={path!r} -> {result['documents']} doc(s)"
+            + (f", recommend {rec['chunk_size']}/{rec['chunk_overlap']}" if rec else ""))
+        self._send(200, "application/json", json.dumps(result))
 
 
 def main():

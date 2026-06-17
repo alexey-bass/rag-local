@@ -47,10 +47,14 @@ keys: embeddings *and* generation both run through a local **Ollama** server.
   load → chunk → embed → upsert → save. `dry_run` scans + chunks + reports counts without
   embedding/saving; `chunk_size`/`chunk_overlap` override defaults per run. **Shared** by
   `ingest.py` and `serve.py`; `emit(event)` streams progress.
+- `rag/analysis.py` — `analyze_paths(paths)`: load + chunk-size sweep (no embedding) → length
+  distribution + per-size chunks/doc stats + a recommended size. Returns plain dicts (JSON-ready).
+  **Shared** by `analyze.py` (CLI) and `serve.py` (`/api/analyze`, which backs the UI's Analyze button).
 - `ingest.py` / `ask.py` — CLIs. `serve.py` — stdlib web server. `web/index.html` —
   single-file UI (vanilla JS, no build, no CDN).
-- `analyze.py` — profiles a doc set (length distribution) and sweeps chunk sizes through the
-  real chunker to **recommend** one; no embedding/Ollama needed. Run it before a big ingest.
+- `analyze.py` — thin CLI over `rag/analysis.py`: profiles a doc set (length distribution) and
+  sweeps chunk sizes through the real chunker to **recommend** one; no embedding/Ollama needed.
+  The web UI's **Analyze** button calls the same logic via `POST /api/analyze`.
 - `eval.py` — measures retrieval (recall@k + MRR) for `retrieve()` against `eval/questions.json`
   (`{q, expect}` pairs; `expect` = substring of the source label). The way to A/B any
   chunk/embedding/hybrid change — e.g. `RAG_HYBRID=0 eval.py` vs default.
@@ -81,7 +85,8 @@ keys: embeddings *and* generation both run through a local **Ollama** server.
 - **Streaming protocol**: `/api/ask` and `/api/ingest` stream **NDJSON** (one JSON object
   per line) over an HTTP/1.0 connection-close response. Event `type`s: `status`, `loaded`,
   `chunked`, `embed`, `sources`, `token`, `done`, `error`. The browser reads it via
-  `fetch().body.getReader()`; keep new events line-delimited.
+  `fetch().body.getReader()`; keep new events line-delimited. `/api/analyze` is the exception —
+  it returns a **single plain JSON** object (analysis is fast and has no progress to stream).
 
 ## Running
 

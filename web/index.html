@@ -72,13 +72,29 @@
             border-radius:999px; padding:4px 11px; cursor:pointer; transition:background .15s,border-color .15s; }
   .toggle:hover { background:var(--accent-weak); border-color:var(--accent); }
   .ingest-panel { max-height:0; overflow:hidden; opacity:0; transition:max-height .26s ease, opacity .2s ease; }
-  .ingest-panel.open { max-height:280px; opacity:1; margin-top:2px; }
+  .ingest-panel.open { max-height:520px; opacity:1; margin-top:2px; }
   .ingest-opts { display:flex; align-items:center; gap:14px; margin-top:8px; font:11.5px var(--mono); color:var(--muted); flex-wrap:wrap; }
   .ingest-opts label { display:inline-flex; align-items:center; gap:6px; }
   .ingest-opts input[type=number] { width:62px; font:12px var(--mono); color:var(--ink); background:var(--bg);
     border:1px solid var(--line); border-radius:7px; padding:4px 7px; outline:none; }
   .ingest-opts input[type=number]:focus { border-color:var(--accent); }
+  .ingest-opts .help { cursor:help; text-decoration:underline dotted var(--faint); text-underline-offset:3px; }
   .opts-hint { color:var(--faint); }
+
+  /* ── analyze output ──────────────────────────────────────── */
+  .an-out:empty { display:none; }
+  .an-out { margin-top:10px; display:flex; flex-direction:column; gap:7px; animation:rise .3s ease both; }
+  .an-head { font:11.5px var(--mono); color:var(--muted); }
+  .an-rec { font:12px var(--mono); color:var(--ink); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .an-rec b { color:var(--accent); }
+  .an-sweep { display:flex; flex-wrap:wrap; gap:6px; }
+  .sizechip { font:11px var(--mono); color:var(--muted); background:var(--surface); border:1px solid var(--line);
+    border-radius:8px; padding:4px 8px; cursor:pointer; display:inline-flex; align-items:baseline; gap:5px;
+    transition:border-color .15s,color .15s,background .15s; }
+  .sizechip:hover { border-color:var(--accent); color:var(--ink); }
+  .sizechip small { color:var(--faint); font-size:9.5px; }
+  .sizechip.rec { border-color:var(--accent); color:var(--ink); background:var(--accent-weak); }
+  button.go.mini { padding:4px 11px; font-size:11.5px; border-radius:8px; }
 
   /* ── ingest ──────────────────────────────────────────────── */
   .ingest { display:flex; gap:8px; align-items:center; }
@@ -86,6 +102,8 @@
     flex:1; min-width:0; font:13px var(--mono); color:var(--ink); background:var(--surface);
     border:1px solid var(--line); border-radius:10px; padding:9px 12px; outline:none; transition:border-color .15s,box-shadow .15s;
   }
+  .ingest-actions { display:flex; align-items:center; gap:8px; margin-top:10px; }
+  .ingest-actions #analyzeBtn { margin-left:auto; }  /* push the button group right; replace stays left */
   .ingest input[type=text]::placeholder { color:var(--faint); }
   .ingest input[type=text]:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-weak); }
   .chk { display:inline-flex; align-items:center; gap:6px; font:12px var(--mono); color:var(--muted); cursor:pointer; user-select:none; white-space:nowrap; }
@@ -164,16 +182,20 @@
         <div class="ingest">
           <input type="text" id="path" autocomplete="off" spellcheck="false"
                  placeholder="Paste a file or folder path (recursive) — e.g. ~/Documents/offers or ~/papers/x.pdf">
+        </div>
+        <div class="ingest-opts">
+          <label title="Chunk size — how many characters of document text go into each indexed piece.&#10;Smaller = more precise matches, but one answer gets split across several pieces.&#10;Larger = whole sections stay together, but each piece matches less precisely.&#10;Blank = default (3200). Click Analyze for a size tuned to your docs."><span class="help">chunk</span> <input type="number" id="chunkSize" placeholder="3200" min="100" max="8000"></label>
+          <label title="Overlap — characters each chunk repeats from the end of the previous one,&#10;so a sentence split across a boundary still appears whole in at least one piece.&#10;Blank = default (480, ≈15% of chunk size)."><span class="help">overlap</span> <input type="number" id="chunkOverlap" placeholder="480" min="0" max="2000"></label>
+          <span class="opts-hint">hover for help · blank = defaults · applies to this ingest</span>
+        </div>
+        <div class="an-out" id="analyzeOut"></div>
+        <div class="ingest-actions">
           <label class="chk" title="On: wipe the whole index and rebuild from only this path. Off: add/update this path, keeping everything else.">
             <input type="checkbox" id="replace"> replace
           </label>
+          <button class="go ghost" id="analyzeBtn" title="Profile these docs and recommend a chunk size — no embedding">Analyze</button>
           <button class="go ghost" id="previewBtn" title="Scan & count what would be indexed — without embedding or saving">Preview</button>
           <button class="go" id="ingestBtn">Ingest</button>
-        </div>
-        <div class="ingest-opts">
-          <label title="Characters per chunk (default 900)">chunk <input type="number" id="chunkSize" placeholder="900" min="100" max="4000"></label>
-          <label title="Overlap between chunks, in characters (default 150)">overlap <input type="number" id="chunkOverlap" placeholder="150" min="0" max="1000"></label>
-          <span class="opts-hint">blank = defaults · applies to this ingest</span>
         </div>
         <div class="ilog" id="ingestLog"></div>
       </div>
@@ -206,11 +228,12 @@ const qBox=$('q'), askBtn=$('askBtn');
 const pathBox=$('path'), replaceBox=$('replace'), ingestBtn=$('ingestBtn'), ingestLog=$('ingestLog');
 const ingestToggle=$('ingestToggle'), ingestPanel=$('ingestPanel');
 const previewBtn=$('previewBtn'), chunkSize=$('chunkSize'), chunkOverlap=$('chunkOverlap');
+const analyzeBtn=$('analyzeBtn'), analyzeOut=$('analyzeOut');
 
 const escapeHtml = (s) => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 let busy = false;
-function setBusy(b){ busy=b; askBtn.disabled=b; ingestBtn.disabled=b; previewBtn.disabled=b; askBtn.textContent=b?'…':'Ask'; }
+function setBusy(b){ busy=b; askBtn.disabled=b; ingestBtn.disabled=b; previewBtn.disabled=b; analyzeBtn.disabled=b; askBtn.textContent=b?'…':'Ask'; }
 
 // ── backend status indicator (AJAX polling) ──────────────────
 function setDot(state,text,tip){ dot.className='dot '+state; pillText.textContent=text; pill.title=tip||''; }
@@ -318,7 +341,48 @@ function enhanceCitations(aEl,raw,xch){
 // ── ingest ───────────────────────────────────────────────────
 ingestBtn.addEventListener('click', ()=>doIngest(false));
 previewBtn.addEventListener('click', ()=>doIngest(true));
+analyzeBtn.addEventListener('click', doAnalyze);
 pathBox.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); doIngest(false); }});
+
+// ── analyze: profile docs + recommend a chunk size (no embedding) ──
+async function doAnalyze(){
+  const path=pathBox.value.trim(); if(!path||busy) return;
+  setBusy(true); analyzeOut.innerHTML=''; ingestLog.className='ilog busy'; ingestLog.textContent='Analyzing…';
+  try{
+    const r=await (await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path})})).json();
+    if(r.error){ ingestLog.className='ilog err'; ingestLog.textContent=r.error; }
+    else if(!r.documents){ ingestLog.className='ilog'; ingestLog.textContent='No supported files (.txt/.md/.pdf) found at that path.'; }
+    else { ingestLog.className='ilog'; ingestLog.textContent=''; renderAnalysis(r); }
+  }catch(e){ ingestLog.className='ilog err'; ingestLog.textContent=String(e); }
+  setBusy(false);
+}
+
+function applySize(size, overlap){
+  chunkSize.value=size; chunkOverlap.value=overlap;
+  analyzeOut.querySelectorAll('.sizechip').forEach(c=>c.classList.toggle('rec', +c.dataset.size===size));
+  [chunkSize,chunkOverlap].forEach(el=>{ el.style.borderColor='var(--accent)'; setTimeout(()=>{ el.style.borderColor=''; },700); });
+  ingestLog.className='ilog ok'; ingestLog.textContent=`Set chunk ${size} / overlap ${overlap} for this ingest. Preview or Ingest when ready.`;
+}
+
+function renderAnalysis(r){
+  const L=r.lengths.document, rec=r.recommended;
+  const chips=r.sweep.map(s=>{
+    const tip=`${s.per_doc_median} chunk(s)/doc · ${Math.round(s.pct_le3*100)}% of docs in ≤3 · ${s.chunks.toLocaleString()} chunks total · ${Math.round(s.fill*100)}% full`;
+    return `<button class="sizechip${s.size===rec.chunk_size?' rec':''}" data-size="${s.size}" data-overlap="${s.overlap}" title="${tip}">`
+         + `${s.size}<small>${s.per_doc_median}/doc</small></button>`;
+  }).join('');
+  analyzeOut.innerHTML =
+    `<div class="an-head">${r.documents.toLocaleString()} docs · median ${L.median.toLocaleString()} chars `
+    + `(p90 ${L.p90.toLocaleString()}) · header ~${r.header_median}/chunk</div>`
+    + `<div class="an-rec">Recommended <b>${rec.chunk_size}</b> / <b>${rec.chunk_overlap}</b> — `
+    + `median ${rec.per_doc_median} chunk/doc, ${Math.round(rec.pct_le3*100)}% in ≤3 `
+    + `<button class="go ghost mini" id="applyRec">Apply</button></div>`
+    + `<div class="an-sweep">${chips}</div>`
+    + `<div class="opts-hint">click a size to set the chunk fields for this ingest</div>`;
+  $('applyRec').addEventListener('click', ()=>applySize(rec.chunk_size, rec.chunk_overlap));
+  analyzeOut.querySelectorAll('.sizechip').forEach(b=>
+    b.addEventListener('click', ()=>applySize(+b.dataset.size, +b.dataset.overlap)));
+}
 
 async function doIngest(dryRun){
   const path=pathBox.value.trim(); if(!path||busy) return;
@@ -342,7 +406,7 @@ async function doIngest(dryRun){
         ingestLog.textContent=evt.documents
           ? `✓ Indexed ${evt.documents} file(s), ${evt.chunks} new chunk(s). Total: ${evt.total_chunks.toLocaleString()}.`
           : 'No supported files (.txt/.md/.pdf) found at that path.';
-        pathBox.value='';
+        pathBox.value=''; analyzeOut.innerHTML='';
       }
     } else if(evt.type==='error'){ ingestLog.className='ilog err'; ingestLog.textContent=evt.message; }
   }).catch(e=>{ ingestLog.className='ilog err'; ingestLog.textContent=String(e); });
