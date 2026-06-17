@@ -47,7 +47,7 @@ def get_store():
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "rag1"
+    server_version = "rag-local"
 
     def log_message(self, fmt, *args):
         sys.stderr.write("  %s\n" % (fmt % args))
@@ -231,7 +231,7 @@ def main():
     store = get_store()
     status = f"{len(store)} chunks indexed" if store else "no index yet — ingest a path in the UI"
     httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    print(f"rag1 web UI  →  http://127.0.0.1:{port}   ({status})")
+    print(f"rag-local web UI  →  http://127.0.0.1:{port}   ({status})")
     print("Ctrl-C to stop.")
     try:
         httpd.serve_forever()

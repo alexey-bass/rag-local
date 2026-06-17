@@ -4,7 +4,7 @@ Guidance for working in this repo.
 
 ## What this is
 
-**rag1** — a tiny Retrieval-Augmented Generation playground over **Ollama**. It indexes the
+**rag-local** — a tiny Retrieval-Augmented Generation playground over **Ollama**. It indexes the
 user's own documents and answers questions over them, citing sources. Embeddings + retrieval
 run **locally** (documents never leave the machine); **generation** defaults to an Ollama
 **cloud** model (`gemma4:31b-cloud`, after a one-time `ollama signin`) but can use any local

@@ -1,4 +1,4 @@
-# rag1 — a tiny local RAG playground
+# rag-local — a tiny local RAG playground
 
 A minimal Retrieval-Augmented Generation system built on [Ollama](https://ollama.com): it
 indexes your own documents and answers questions about them, citing the passages it used.
@@ -78,7 +78,7 @@ ollama serve              # leave running in a terminal (or it runs as a backgro
 ollama pull nomic-embed-text
 ```
 
-**3. Set up generation.** By default rag1 writes answers with a **cloud** model
+**3. Set up generation.** By default rag-local writes answers with a **cloud** model
 (`gemma4:31b-cloud`) — bigger and faster than a laptop can run, but your question and the
 retrieved passages are sent to ollama.com. Connect this machine to your account once:
 
@@ -86,7 +86,7 @@ retrieved passages are sent to ollama.com. Connect this machine to your account 
 ollama signin     # opens a browser to sign in to ollama.com (needed only for *-cloud models)
 ```
 
-Prefer to stay fully offline? Skip the sign-in, pull a local model, and point rag1 at it:
+Prefer to stay fully offline? Skip the sign-in, pull a local model, and point rag-local at it:
 
 ```bash
 ollama pull llama3.2
@@ -144,7 +144,7 @@ Run `serve.py` in a terminal to watch them live.
 .venv/bin/python ingest.py ~/Documents/notes
 .venv/bin/python ingest.py ~/papers/paper.pdf ~/wiki
 
-# Globs work too — quote them so rag1 expands the * (matches files AND folders, recursively):
+# Globs work too — quote them so rag-local expands the * (matches files AND folders, recursively):
 .venv/bin/python ingest.py "~/papers/*.pdf"
 .venv/bin/python ingest.py "~/jobs/offers/2606*"     # every file under each matching folder
 
@@ -193,7 +193,7 @@ export RAG_GEN_MODEL=llama3.2
 ```
 
 Cloud models (the `*-cloud` tags) run on ollama.com after `ollama signin`; the web UI marks them
-`☁ cloud` in the status pill, and your question + retrieved passages are sent there. To run rag1
+`☁ cloud` in the status pill, and your question + retrieved passages are sent there. To run rag-local
 **100% offline**, point `RAG_GEN_MODEL` at any local model — `nomic-embed-text` already keeps
 embeddings on-device.
 

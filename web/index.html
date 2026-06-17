@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>rag1 — local retrieval</title>
+<title>rag-local — local retrieval</title>
 <style>
   /* ─────────────────────────────────────────────────────────────
-     rag1 · warm editorial-technical minimalism
+     rag-local · warm editorial-technical minimalism
      mono = tool chrome · serif = reading · one terracotta accent
      single self-contained file, local fonts only, no CDN
   ───────────────────────────────────────────────────────────── */
@@ -172,7 +172,7 @@
   <header>
     <div class="bar">
       <div class="row1">
-        <span class="mark"><span class="sq"></span>rag1</span>
+        <span class="mark"><span class="sq"></span>rag-local</span>
         <span class="tag">local&nbsp;retrieval</span>
         <button class="toggle" id="ingestToggle" aria-expanded="false">＋ Ingest</button>
         <button class="toggle" id="newChat" title="Clear the conversation and start fresh" hidden>⟲ New</button>
@@ -277,7 +277,7 @@ async function refreshStatus(){
         `Searchable chunks in the index${s.embed_model?` · embeddings via ${s.embed_model}`:''}.`);
       meta.hidden=false;
     }
-  } catch { meta.hidden=true; setDot('off','server offline','The rag1 web server is not responding.'); }
+  } catch { meta.hidden=true; setDot('off','server offline','The rag-local web server is not responding.'); }
 }
 
 // ── shared NDJSON stream reader (ask + ingest stay HTTP-streamed) ──
@@ -307,7 +307,7 @@ async function ask(){
 
   const xch=document.createElement('div'); xch.className='xch';
   xch.innerHTML=`<div><div class="lab">You</div><div class="q"></div></div>
-                 <div><div class="lab">rag1</div><div class="a"><span class="caret"></span></div></div>`;
+                 <div><div class="lab">rag-local</div><div class="a"><span class="caret"></span></div></div>`;
   xch.querySelector('.q').textContent=question; wrap.appendChild(xch);
   const aEl=xch.querySelector('.a'), caret=aEl.querySelector('.caret'); let raw='';
   scrollDown();
