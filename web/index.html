@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rag1 — local retrieval</title>
+<style>
+  /* ─────────────────────────────────────────────────────────────
+     rag1 · warm editorial-technical minimalism
+     mono = tool chrome · serif = reading · one terracotta accent
+     single self-contained file, local fonts only, no CDN
+  ───────────────────────────────────────────────────────────── */
+  :root {
+    --paper:#f7f4ee; --surface:#fffdf9; --raise:#fbf8f2;
+    --ink:#1d1a16; --muted:#8c8479; --faint:#b4ac9f; --line:#e8e2d6;
+    --accent:#bb501e; --accent-ink:#fff; --accent-weak:#f3e7dd;
+    --ok:#2f8f5b; --warn:#b07d1a; --danger:#bb3a2a;
+    --mono:"SF Mono",ui-monospace,Menlo,"Cascadia Mono",Consolas,monospace;
+    --serif:"Iowan Old Style","Charter","Palatino Linotype",Palatino,Georgia,serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+    --shadow:0 1px 2px rgba(40,30,20,.04),0 8px 28px -16px rgba(40,30,20,.18);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper:#131210; --surface:#1c1916; --raise:#221e19;
+      --ink:#ece6dc; --muted:#978d7e; --faint:#665f54; --line:#2b2620;
+      --accent:#e3884b; --accent-ink:#1a1410; --accent-weak:#2c2117;
+      --ok:#4cc488; --warn:#e3b052; --danger:#ff7d6b;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -16px rgba(0,0,0,.6);
+    }
+  }
+  * { box-sizing:border-box; }
+  html,body { height:100%; margin:0; }
+  body {
+    background:var(--paper); color:var(--ink); font-family:var(--serif);
+    display:flex; flex-direction:column; height:100vh; overflow:hidden;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  }
+  ::selection { background:var(--accent-weak); }
+  ::-webkit-scrollbar { width:11px; height:11px; }
+  ::-webkit-scrollbar-thumb { background:var(--line); border:3px solid transparent; background-clip:content-box; border-radius:8px; }
+  ::-webkit-scrollbar-thumb:hover { background:var(--faint); background-clip:content-box; }
+
+  @keyframes rise { from { opacity:0; transform:translateY(9px); } to { opacity:1; transform:none; } }
+  @keyframes blink { 50% { opacity:0; } }
+  @keyframes pulse { 0%{box-shadow:0 0 0 0 var(--accent);} 70%{box-shadow:0 0 0 5px transparent;} 100%{box-shadow:0 0 0 0 transparent;} }
+  @keyframes shimmer { 100% { background-position:200% 0; } }
+
+  /* ── top bar ─────────────────────────────────────────────── */
+  header { padding:18px 26px 0; animation:rise .5s ease both; }
+  .bar { max-width:760px; margin:0 auto; display:flex; flex-direction:column; gap:12px; }
+  .row1 { display:flex; align-items:baseline; gap:12px; }
+  .mark { font:600 19px/1 var(--mono); letter-spacing:-.5px; display:flex; align-items:center; gap:7px; }
+  .mark .sq { width:9px; height:9px; background:var(--accent); border-radius:2px; transform:rotate(45deg); }
+  .tag { font:11px var(--mono); letter-spacing:.18em; text-transform:uppercase; color:var(--faint); }
+
+  .status {
+    margin-left:auto; display:inline-flex; align-items:center; gap:8px; cursor:default;
+    font:12px var(--mono); color:var(--muted); background:var(--surface);
+    border:1px solid var(--line); border-radius:999px; padding:5px 12px 5px 10px; box-shadow:var(--shadow);
+  }
+  .dot { width:7px; height:7px; border-radius:50%; background:var(--faint); flex:none; }
+  .dot.ok{background:var(--ok); animation:pulse 2.4s ease-out infinite;}
+  .dot.warn{background:var(--warn);} .dot.bad{background:var(--danger);} .dot.off{background:var(--faint);}
+
+  .meta { font:11.5px var(--mono); color:var(--muted); display:flex; flex-wrap:wrap; gap:4px 16px; padding-left:1px; }
+  .meta span { white-space:nowrap; }
+  .meta b { color:var(--ink); font-weight:600; }
+  .meta i { color:var(--accent); font-style:normal; }
+
+  /* ── ingest ──────────────────────────────────────────────── */
+  .ingest { display:flex; gap:8px; align-items:center; }
+  .ingest input[type=text] {
+    flex:1; min-width:0; font:13px var(--mono); color:var(--ink); background:var(--surface);
+    border:1px solid var(--line); border-radius:10px; padding:9px 12px; outline:none; transition:border-color .15s,box-shadow .15s;
+  }
+  .ingest input[type=text]::placeholder { color:var(--faint); }
+  .ingest input[type=text]:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-weak); }
+  .chk { display:inline-flex; align-items:center; gap:6px; font:12px var(--mono); color:var(--muted); cursor:pointer; user-select:none; white-space:nowrap; }
+  .chk input { accent-color:var(--accent); }
+  button.go {
+    font:600 13px var(--mono); letter-spacing:.02em; color:var(--accent-ink); background:var(--accent);
+    border:0; border-radius:10px; padding:9px 18px; cursor:pointer; transition:transform .08s,filter .15s,opacity .15s;
+  }
+  button.go:hover { filter:brightness(1.07); } button.go:active { transform:translateY(1px); }
+  button.go.ghost { background:transparent; color:var(--accent); border:1px solid var(--line); }
+  button.go.ghost:hover { border-color:var(--accent); background:var(--accent-weak); }
+  button:disabled { opacity:.45; cursor:default; transform:none; filter:none; }
+
+  .ilog { font:11.5px var(--mono); color:var(--muted); min-height:15px; transition:color .2s; }
+  .ilog.busy { background:linear-gradient(90deg,var(--muted) 30%,var(--accent) 50%,var(--muted) 70%); background-size:200% 100%;
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; animation:shimmer 1.4s linear infinite; }
+  .ilog.err { color:var(--danger); }
+  .ilog.ok { color:var(--ok); }
+  header hr { border:0; border-top:1px solid var(--line); margin:16px 0 0; }
+
+  /* ── thread ──────────────────────────────────────────────── */
+  main { flex:1; overflow-y:auto; padding:26px; scroll-behavior:smooth; }
+  .thread { max-width:760px; margin:0 auto; display:flex; flex-direction:column; gap:34px; padding-bottom:8px; }
+  .empty { text-align:center; color:var(--muted); font-size:16px; line-height:1.7; margin-top:13vh; animation:rise .6s ease both .15s; }
+  .empty .big { font-size:21px; color:var(--ink); display:block; margin-bottom:10px; letter-spacing:-.2px; }
+  .empty kbd { font:12px var(--mono); background:var(--surface); border:1px solid var(--line); border-bottom-width:2px; border-radius:5px; padding:1px 6px; color:var(--ink); }
+
+  .xch { display:flex; flex-direction:column; gap:14px; animation:rise .4s ease both; }
+  .lab { font:600 10.5px var(--mono); letter-spacing:.2em; text-transform:uppercase; color:var(--faint); display:flex; align-items:center; gap:8px; }
+  .lab::after { content:""; flex:1; height:1px; background:var(--line); }
+  .q { font-size:20px; font-weight:500; line-height:1.45; letter-spacing:-.2px; }
+
+  .a { font-size:16.5px; line-height:1.72; white-space:pre-wrap; word-wrap:break-word; }
+  .a .caret { display:inline-block; width:8px; height:1.05em; background:var(--accent); vertical-align:text-bottom; border-radius:1px; animation:blink 1.05s steps(2) infinite; }
+  .a.err { color:var(--danger); font-family:var(--mono); font-size:13.5px; line-height:1.6;
+    background:var(--surface); border:1px solid var(--danger); border-radius:12px; padding:14px 16px; }
+  .cite { font:600 12px var(--mono); color:var(--accent); background:var(--accent-weak); border:0;
+    border-radius:5px; padding:1px 5px; margin:0 1px; cursor:pointer; vertical-align:baseline; transition:filter .12s; }
+  .cite:hover { filter:brightness(.94); }
+
+  /* ── sources ─────────────────────────────────────────────── */
+  .srcs { display:flex; flex-direction:column; gap:7px; }
+  details.src { background:var(--surface); border:1px solid var(--line); border-radius:11px; overflow:hidden; transition:border-color .15s; }
+  details.src[open] { border-color:var(--accent); box-shadow:var(--shadow); }
+  details.src.flash { animation:flashbg 1.2s ease; }
+  @keyframes flashbg { 0%{background:var(--accent-weak);} 100%{background:var(--surface);} }
+  summary { cursor:pointer; list-style:none; display:flex; align-items:center; gap:10px; padding:11px 13px; font-family:var(--mono); }
+  summary::-webkit-details-marker { display:none; }
+  summary .n { font:600 12px var(--mono); color:var(--accent); min-width:20px; }
+  summary .src-name { font:12.5px var(--mono); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  summary .score { margin-left:auto; font:11px var(--mono); color:var(--muted); background:var(--raise); border:1px solid var(--line); border-radius:6px; padding:2px 7px; }
+  .snippet { font:13px/1.65 var(--mono); color:var(--muted); white-space:pre-wrap; word-wrap:break-word; padding:2px 14px 14px; max-height:300px; overflow-y:auto; }
+
+  /* ── composer ────────────────────────────────────────────── */
+  footer { padding:14px 26px calc(14px + env(safe-area-inset-bottom)); background:linear-gradient(to top,var(--paper) 70%,transparent); animation:rise .5s ease both .08s; }
+  .field { max-width:760px; margin:0 auto; display:flex; gap:10px; align-items:flex-end;
+    background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:8px 8px 8px 16px; box-shadow:var(--shadow); transition:border-color .15s,box-shadow .15s; }
+  .field:focus-within { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-weak),var(--shadow); }
+  .field textarea { flex:1; resize:none; border:0; outline:none; background:transparent; color:var(--ink);
+    font:16px/1.5 var(--serif); padding:7px 0; max-height:168px; }
+  .field textarea::placeholder { color:var(--faint); }
+  .field .go { border-radius:11px; align-self:stretch; }
+</style>
+</head>
+<body>
+  <header>
+    <div class="bar">
+      <div class="row1">
+        <span class="mark"><span class="sq"></span>rag1</span>
+        <span class="tag">local&nbsp;retrieval</span>
+        <span class="status" id="pill" title=""><span class="dot off" id="dot"></span><span id="pillText">connecting</span></span>
+      </div>
+      <div class="meta" id="meta" hidden></div>
+      <div class="ingest">
+        <input type="text" id="path" autocomplete="off" spellcheck="false"
+               placeholder="Paste a file or folder path (recursive) — e.g. ~/Documents/offers or ~/papers/x.pdf">
+        <label class="chk" title="On: wipe the whole index and rebuild from only this path. Off: add/update this path, keeping everything else.">
+          <input type="checkbox" id="replace"> replace
+        </label>
+        <button class="go ghost" id="ingestBtn">Ingest</button>
+      </div>
+      <div class="ilog" id="ingestLog"></div>
+      <hr>
+    </div>
+  </header>
+
+  <main>
+    <div class="thread" id="wrap">
+      <div class="empty" id="hint">
+        <span class="big">Ask your documents.</span>
+        Paste a path above and <b>Ingest</b>, then ask a question.<br>
+        Answers stream in with cited sources — all local, via Ollama.<br><br>
+        <kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> for a newline
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="field">
+      <textarea id="q" rows="1" placeholder="Ask a question about your documents…"></textarea>
+      <button class="go" id="askBtn">Ask</button>
+    </div>
+  </footer>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const wrap=$('wrap'), hint=$('hint'), pill=$('pill'), dot=$('dot'), pillText=$('pillText'), meta=$('meta');
+const qBox=$('q'), askBtn=$('askBtn');
+const pathBox=$('path'), replaceBox=$('replace'), ingestBtn=$('ingestBtn'), ingestLog=$('ingestLog');
+
+const escapeHtml = (s) => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+let busy = false;
+function setBusy(b){ busy=b; askBtn.disabled=b; ingestBtn.disabled=b; askBtn.textContent=b?'…':'Ask'; }
+
+// ── backend status indicator (AJAX polling) ──────────────────
+function setDot(state,text,tip){ dot.className='dot '+state; pillText.textContent=text; pill.title=tip||''; }
+function addMeta(label,value,accent){
+  const s=document.createElement('span'); s.append(label+' ');
+  const tag=document.createElement(accent?'i':'b'); tag.textContent=value; s.appendChild(tag); meta.appendChild(s);
+}
+async function refreshStatus(){
+  try {
+    const s = await (await fetch('/api/status')).json();
+    if(!s.ollama){ meta.hidden=true; setDot('bad','Ollama offline','Backend not reachable. Start it with:  ollama serve'); }
+    else if(!s.embed_ready || !s.gen_ready){
+      meta.hidden=true; const m=[]; if(!s.embed_ready)m.push(s.embed_model); if(!s.gen_ready)m.push(s.gen_model);
+      setDot('warn','model missing','Pull required models:  '+m.map(x=>'ollama pull '+x).join('   '));
+    } else {
+      setDot('ok','connected',`Ollama running${s.gen_digest?' · '+s.gen_digest:''}`);
+      const spec=[s.gen_params,s.gen_quant].filter(Boolean).join(', ');
+      meta.innerHTML='';
+      addMeta('ollama', s.ollama_version||'—');
+      addMeta('model', (s.gen_version||s.gen_model)+(spec?` (${spec})`:''), true);
+      addMeta('index', s.index_exists?`${s.chunks.toLocaleString()} chunks`:'empty');
+      meta.hidden=false;
+    }
+  } catch { meta.hidden=true; setDot('off','server offline','The rag1 web server is not responding.'); }
+}
+
+// ── shared NDJSON stream reader (ask + ingest stay HTTP-streamed) ──
+async function streamPost(url, body, onEvent){
+  const res = await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const reader=res.body.getReader(), dec=new TextDecoder(); let buf='';
+  for(;;){
+    const {value,done}=await reader.read(); if(done) break;
+    buf+=dec.decode(value,{stream:true}); let nl;
+    while((nl=buf.indexOf('\n'))>=0){ const line=buf.slice(0,nl).trim(); buf=buf.slice(nl+1);
+      if(line){ try{ onEvent(JSON.parse(line)); }catch{} } }
+  }
+  if(buf.trim()){ try{ onEvent(JSON.parse(buf.trim())); }catch{} }
+}
+
+// ── ask ──────────────────────────────────────────────────────
+function autoSize(){ qBox.style.height='auto'; qBox.style.height=Math.min(qBox.scrollHeight,168)+'px'; }
+qBox.addEventListener('input',autoSize);
+qBox.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); ask(); }});
+askBtn.addEventListener('click',ask);
+
+async function ask(){
+  const question=qBox.value.trim(); if(!question||busy) return;
+  if(hint) hint.remove();
+  qBox.value=''; autoSize(); setBusy(true);
+
+  const xch=document.createElement('div'); xch.className='xch';
+  xch.innerHTML=`<div><div class="lab">You</div><div class="q"></div></div>
+                 <div><div class="lab">rag1</div><div class="a"><span class="caret"></span></div></div>`;
+  xch.querySelector('.q').textContent=question; wrap.appendChild(xch);
+  const aEl=xch.querySelector('.a'), caret=aEl.querySelector('.caret'); let raw='';
+  scrollDown();
+
+  await streamPost('/api/ask',{question},(evt)=>{
+    if(evt.type==='sources'){ xch.appendChild(renderSources(evt.sources)); }
+    else if(evt.type==='token'){ raw+=evt.text; caret.insertAdjacentText('beforebegin',evt.text); scrollDown(); }
+    else if(evt.type==='error'){ aEl.classList.add('err'); aEl.textContent=evt.message; }
+    else if(evt.type==='done'){ caret.remove(); enhanceCitations(aEl,raw,xch); }
+  }).catch(e=>{ aEl.classList.add('err'); aEl.textContent=String(e); });
+
+  if(caret.isConnected) caret.remove();
+  setBusy(false); refreshStatus(); scrollDown();
+}
+
+function renderSources(sources){
+  const box=document.createElement('div'); box.className='srcs';
+  const lab=document.createElement('div'); lab.className='lab'; lab.textContent=`Sources · ${sources.length}`; box.appendChild(lab);
+  for(const s of sources){
+    const d=document.createElement('details'); d.className='src'; d.dataset.n=s.n;
+    const sum=document.createElement('summary');
+    sum.innerHTML=`<span class="n">[${s.n}]</span><span class="src-name"></span><span class="score">${s.score.toFixed(3)}</span>`;
+    sum.querySelector('.src-name').textContent=`${s.source} #${s.chunk}`;
+    const pre=document.createElement('div'); pre.className='snippet'; pre.textContent=s.text;
+    d.append(sum,pre); box.appendChild(d);
+  }
+  return box;
+}
+
+// turn [1]/[2] markers into chips that reveal the matching source
+function enhanceCitations(aEl,raw,xch){
+  aEl.innerHTML = escapeHtml(raw).replace(/\[(\d+)\]/g,'<button class="cite" data-n="$1">[$1]</button>');
+  aEl.querySelectorAll('.cite').forEach(btn=>btn.addEventListener('click',()=>{
+    const d=xch.querySelector(`details.src[data-n="${btn.dataset.n}"]`); if(!d) return;
+    d.open=true; d.scrollIntoView({behavior:'smooth',block:'center'});
+    d.classList.remove('flash'); void d.offsetWidth; d.classList.add('flash');
+  }));
+}
+
+// ── ingest ───────────────────────────────────────────────────
+ingestBtn.addEventListener('click',ingest);
+pathBox.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); ingest(); }});
+
+async function ingest(){
+  const path=pathBox.value.trim(); if(!path||busy) return;
+  setBusy(true); ingestLog.className='ilog busy'; ingestLog.textContent='Scanning…';
+  await streamPost('/api/ingest',{path,replace:replaceBox.checked},(evt)=>{
+    if(evt.type==='status') ingestLog.textContent=evt.message;
+    else if(evt.type==='loaded') ingestLog.textContent=`Found ${evt.documents} file(s)…`;
+    else if(evt.type==='chunked') ingestLog.textContent=`Embedding ${evt.chunks} chunk(s)…`;
+    else if(evt.type==='embed') ingestLog.textContent=`Embedding ${evt.current}/${evt.total}…`;
+    else if(evt.type==='done'){
+      ingestLog.className='ilog ok';
+      ingestLog.textContent=evt.documents?`✓ Indexed ${evt.documents} file(s), ${evt.chunks} new chunk(s). Total: ${evt.total_chunks.toLocaleString()}.`
+        :'No supported files (.txt/.md/.pdf) found at that path.';
+      pathBox.value='';
+    } else if(evt.type==='error'){ ingestLog.className='ilog err'; ingestLog.textContent=evt.message; }
+  }).catch(e=>{ ingestLog.className='ilog err'; ingestLog.textContent=String(e); });
+  setBusy(false); refreshStatus();
+}
+
+function scrollDown(){ const m=document.querySelector('main'); m.scrollTop=m.scrollHeight; }
+
+refreshStatus();
+setInterval(refreshStatus,5000);   // keep the backend indicator live
+qBox.focus();
+</script>
+</body>
+</html>

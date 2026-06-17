@@ -1,0 +1,9 @@
+.venv/
+index/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Your documents stay local; don't commit them.
+data/*
+!data/README.md
