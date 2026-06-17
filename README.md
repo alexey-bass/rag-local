@@ -80,9 +80,10 @@ then ask questions. It binds to `127.0.0.1` only. Features:
 - **Streaming answers** with clickable `[1]`/`[2]` citation chips that jump to the source.
 - **Source snippets** — every answer lists the retrieved chunks with similarity scores; expand to read them.
 - **Backend indicator** (top-right pill): 🟢 connected · 🟡 model missing · 🔴 Ollama offline · ⚪ server offline.
-  When connected it shows the Ollama version and the LLM build, e.g. `Ollama 0.30.8 · LLM llama3.2:latest (3.2B, Q4_K_M)`.
-- **`replace index` checkbox** — *off*: add/update the pasted path, keeping the rest of the index;
-  *on*: wipe the index and rebuild from only this path.
+  When connected it shows the Ollama version and the LLM build, e.g. `Ollama 0.30.8 · LLM llama3.2 (3.2B, Q4_K_M)` (hover the model for an explanation).
+- **Collapsible ingest panel** — hidden by default; the `＋ Ingest` chip opens it. Includes a
+  **Preview** (dry-run: counts files/chunks without embedding), per-ingest **chunk size/overlap**,
+  and the **`replace`** toggle (*off*: add/update this path; *on*: wipe and rebuild from only it).
 - **Collection questions** — "how many docs?", "what companies?" are answered from a computed
   index overview, since semantic search alone can't count or aggregate.
 
@@ -118,6 +119,14 @@ Run `serve.py` in a terminal to watch them live.
 
 ```bash
 .venv/bin/python ingest.py --replace ~/papers
+```
+
+Extra options: `--dry-run` (scan + count without embedding or saving) and `--chunk-size N` /
+`--chunk-overlap N` (override chunking for one run):
+
+```bash
+.venv/bin/python ingest.py --dry-run ~/papers                  # preview: file & chunk counts
+.venv/bin/python ingest.py --chunk-size 1200 --replace ~/papers
 ```
 
 ## Tuning

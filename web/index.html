@@ -68,6 +68,17 @@
   .meta b { color:var(--ink); font-weight:600; }
   .meta i { color:var(--accent); font-style:normal; }
   .meta .help { cursor:help; text-decoration:underline dotted var(--faint); text-underline-offset:3px; }
+  .toggle { font:600 11.5px var(--mono); color:var(--accent); background:transparent; border:1px solid var(--line);
+            border-radius:999px; padding:4px 11px; cursor:pointer; transition:background .15s,border-color .15s; }
+  .toggle:hover { background:var(--accent-weak); border-color:var(--accent); }
+  .ingest-panel { max-height:0; overflow:hidden; opacity:0; transition:max-height .26s ease, opacity .2s ease; }
+  .ingest-panel.open { max-height:280px; opacity:1; margin-top:2px; }
+  .ingest-opts { display:flex; align-items:center; gap:14px; margin-top:8px; font:11.5px var(--mono); color:var(--muted); flex-wrap:wrap; }
+  .ingest-opts label { display:inline-flex; align-items:center; gap:6px; }
+  .ingest-opts input[type=number] { width:62px; font:12px var(--mono); color:var(--ink); background:var(--bg);
+    border:1px solid var(--line); border-radius:7px; padding:4px 7px; outline:none; }
+  .ingest-opts input[type=number]:focus { border-color:var(--accent); }
+  .opts-hint { color:var(--faint); }
 
   /* ── ingest ──────────────────────────────────────────────── */
   .ingest { display:flex; gap:8px; align-items:center; }
@@ -145,18 +156,27 @@
       <div class="row1">
         <span class="mark"><span class="sq"></span>rag1</span>
         <span class="tag">local&nbsp;retrieval</span>
+        <button class="toggle" id="ingestToggle" aria-expanded="false">＋ Ingest</button>
         <span class="status" id="pill" title=""><span class="dot off" id="dot"></span><span id="pillText">connecting</span></span>
       </div>
       <div class="meta" id="meta" hidden></div>
-      <div class="ingest">
-        <input type="text" id="path" autocomplete="off" spellcheck="false"
-               placeholder="Paste a file or folder path (recursive) — e.g. ~/Documents/offers or ~/papers/x.pdf">
-        <label class="chk" title="On: wipe the whole index and rebuild from only this path. Off: add/update this path, keeping everything else.">
-          <input type="checkbox" id="replace"> replace
-        </label>
-        <button class="go ghost" id="ingestBtn">Ingest</button>
+      <div class="ingest-panel" id="ingestPanel">
+        <div class="ingest">
+          <input type="text" id="path" autocomplete="off" spellcheck="false"
+                 placeholder="Paste a file or folder path (recursive) — e.g. ~/Documents/offers or ~/papers/x.pdf">
+          <label class="chk" title="On: wipe the whole index and rebuild from only this path. Off: add/update this path, keeping everything else.">
+            <input type="checkbox" id="replace"> replace
+          </label>
+          <button class="go ghost" id="previewBtn" title="Scan & count what would be indexed — without embedding or saving">Preview</button>
+          <button class="go" id="ingestBtn">Ingest</button>
+        </div>
+        <div class="ingest-opts">
+          <label title="Characters per chunk (default 900)">chunk <input type="number" id="chunkSize" placeholder="900" min="100" max="4000"></label>
+          <label title="Overlap between chunks, in characters (default 150)">overlap <input type="number" id="chunkOverlap" placeholder="150" min="0" max="1000"></label>
+          <span class="opts-hint">blank = defaults · applies to this ingest</span>
+        </div>
+        <div class="ilog" id="ingestLog"></div>
       </div>
-      <div class="ilog" id="ingestLog"></div>
       <hr>
     </div>
   </header>
@@ -184,11 +204,13 @@ const $ = (id) => document.getElementById(id);
 const wrap=$('wrap'), hint=$('hint'), pill=$('pill'), dot=$('dot'), pillText=$('pillText'), meta=$('meta');
 const qBox=$('q'), askBtn=$('askBtn');
 const pathBox=$('path'), replaceBox=$('replace'), ingestBtn=$('ingestBtn'), ingestLog=$('ingestLog');
+const ingestToggle=$('ingestToggle'), ingestPanel=$('ingestPanel');
+const previewBtn=$('previewBtn'), chunkSize=$('chunkSize'), chunkOverlap=$('chunkOverlap');
 
 const escapeHtml = (s) => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 let busy = false;
-function setBusy(b){ busy=b; askBtn.disabled=b; ingestBtn.disabled=b; askBtn.textContent=b?'…':'Ask'; }
+function setBusy(b){ busy=b; askBtn.disabled=b; ingestBtn.disabled=b; previewBtn.disabled=b; askBtn.textContent=b?'…':'Ask'; }
 
 // ── backend status indicator (AJAX polling) ──────────────────
 function setDot(state,text,tip){ dot.className='dot '+state; pillText.textContent=text; pill.title=tip||''; }
@@ -294,28 +316,51 @@ function enhanceCitations(aEl,raw,xch){
 }
 
 // ── ingest ───────────────────────────────────────────────────
-ingestBtn.addEventListener('click',ingest);
-pathBox.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); ingest(); }});
+ingestBtn.addEventListener('click', ()=>doIngest(false));
+previewBtn.addEventListener('click', ()=>doIngest(true));
+pathBox.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); doIngest(false); }});
 
-async function ingest(){
+async function doIngest(dryRun){
   const path=pathBox.value.trim(); if(!path||busy) return;
-  setBusy(true); ingestLog.className='ilog busy'; ingestLog.textContent='Scanning…';
-  await streamPost('/api/ingest',{path,replace:replaceBox.checked},(evt)=>{
+  const body={path, replace:replaceBox.checked, dry_run:dryRun};
+  const cs=parseInt(chunkSize.value,10); if(!isNaN(cs)) body.chunk_size=cs;
+  const co=parseInt(chunkOverlap.value,10); if(!isNaN(co)) body.chunk_overlap=co;
+  setBusy(true); ingestLog.className='ilog busy'; ingestLog.textContent=dryRun?'Previewing…':'Scanning…';
+  await streamPost('/api/ingest', body, (evt)=>{
     if(evt.type==='status') ingestLog.textContent=evt.message;
     else if(evt.type==='loaded') ingestLog.textContent=`Found ${evt.documents} file(s)…`;
-    else if(evt.type==='chunked') ingestLog.textContent=`Embedding ${evt.chunks} chunk(s)…`;
+    else if(evt.type==='chunked') ingestLog.textContent=dryRun?`${evt.chunks} chunk(s)…`:`Embedding ${evt.chunks} chunk(s)…`;
     else if(evt.type==='embed') ingestLog.textContent=`Embedding ${evt.current}/${evt.total}…`;
     else if(evt.type==='done'){
-      ingestLog.className='ilog ok';
-      ingestLog.textContent=evt.documents?`✓ Indexed ${evt.documents} file(s), ${evt.chunks} new chunk(s). Total: ${evt.total_chunks.toLocaleString()}.`
-        :'No supported files (.txt/.md/.pdf) found at that path.';
-      pathBox.value='';
+      if(evt.dry_run){
+        ingestLog.className='ilog';
+        ingestLog.textContent=evt.documents
+          ? `Preview: ${evt.documents} file(s) → ~${evt.chunks} chunks (nothing saved). Click Ingest to index.`
+          : 'No supported files (.txt/.md/.pdf) found at that path.';
+      } else {
+        ingestLog.className='ilog ok';
+        ingestLog.textContent=evt.documents
+          ? `✓ Indexed ${evt.documents} file(s), ${evt.chunks} new chunk(s). Total: ${evt.total_chunks.toLocaleString()}.`
+          : 'No supported files (.txt/.md/.pdf) found at that path.';
+        pathBox.value='';
+      }
     } else if(evt.type==='error'){ ingestLog.className='ilog err'; ingestLog.textContent=evt.message; }
   }).catch(e=>{ ingestLog.className='ilog err'; ingestLog.textContent=String(e); });
   setBusy(false); refreshStatus();
 }
 
 function scrollDown(){ const m=document.querySelector('main'); m.scrollTop=m.scrollHeight; }
+
+// ── collapsible ingest panel (default hidden; choice persists across refreshes) ──
+function setIngestOpen(open, focusInput){
+  ingestPanel.classList.toggle('open', open);
+  ingestToggle.setAttribute('aria-expanded', open);
+  ingestToggle.textContent=(open?'− ':'＋ ')+'Ingest';
+  try{ localStorage.setItem('ingestOpen', open?'1':'0'); }catch{}
+  if(open && focusInput) pathBox.focus();
+}
+ingestToggle.addEventListener('click', ()=> setIngestOpen(!ingestPanel.classList.contains('open'), true));
+setIngestOpen((()=>{ try{ return localStorage.getItem('ingestOpen')==='1'; }catch{ return false; } })(), false);
 
 refreshStatus();
 setInterval(refreshStatus,60000);  // heartbeat once a minute (ask/ingest refresh immediately)

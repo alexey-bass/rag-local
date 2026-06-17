@@ -35,8 +35,10 @@ keys: embeddings *and* generation both run through a local **Ollama** server.
 - `rag/pipeline.py` — `retrieve()` (filters by `MIN_SCORE`), `build_user_message()`,
   `SYSTEM_PROMPT`, plus `OVERVIEW_PROMPT` + `overview_user_message()` for the corpus fallback.
   **Shared** by `ask.py` and `serve.py`. Change retrieval/prompt logic HERE, not in a front-end.
-- `rag/indexer.py` — `ingest_paths(paths, replace, emit)`: load → chunk → embed → upsert →
-  save. **Shared** by `ingest.py` and `serve.py`. `emit(event)` streams progress.
+- `rag/indexer.py` — `ingest_paths(paths, replace, emit, chunk_size, chunk_overlap, dry_run)`:
+  load → chunk → embed → upsert → save. `dry_run` scans + chunks + reports counts without
+  embedding/saving; `chunk_size`/`chunk_overlap` override defaults per run. **Shared** by
+  `ingest.py` and `serve.py`; `emit(event)` streams progress.
 - `ingest.py` / `ask.py` — CLIs. `serve.py` — stdlib web server. `web/index.html` —
   single-file UI (vanilla JS, no build, no CDN).
 

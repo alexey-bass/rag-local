@@ -11,6 +11,12 @@ Ingest any file or folder you point at (folders are searched recursively):
 Re-ingesting a path updates its chunks (no duplicates). Use --replace to wipe
 the whole index and start fresh:
     python ingest.py --replace ~/papers
+
+Options:
+    --replace              wipe the index and rebuild from the given paths
+    --dry-run              scan + chunk and report counts, without embedding or saving
+    --chunk-size N         override chunk size (chars) for this run
+    --chunk-overlap N      override chunk overlap (chars) for this run
 """
 import sys
 
@@ -32,14 +38,36 @@ def _progress(event):
 
 
 def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("-")]
-    replace = any(a in ("--replace", "-r") for a in sys.argv[1:])
-    if any(a in ("-h", "--help") for a in sys.argv[1:]):
+    argv = sys.argv[1:]
+    if any(a in ("-h", "--help") for a in argv):
         print(__doc__)
         return 0
 
-    paths = args or [str(config.DATA_DIR)]
-    stats = ingest_paths(paths, replace=replace, emit=_progress)
+    replace = dry_run = False
+    chunk_size = chunk_overlap = None
+    paths = []
+    it = iter(argv)
+    for a in it:
+        if a in ("--replace", "-r"):
+            replace = True
+        elif a == "--dry-run":
+            dry_run = True
+        elif a in ("--chunk-size", "--chunk-overlap"):
+            try:
+                value = int(next(it))
+            except (StopIteration, ValueError):
+                print(f"[error] {a} needs an integer", file=sys.stderr)
+                return 2
+            chunk_size, chunk_overlap = (value, chunk_overlap) if a == "--chunk-size" else (chunk_size, value)
+        elif a.startswith("-"):
+            print(f"[error] unknown option {a}", file=sys.stderr)
+            return 2
+        else:
+            paths.append(a)
+
+    paths = paths or [str(config.DATA_DIR)]
+    stats = ingest_paths(paths, replace=replace, emit=_progress,
+                         chunk_size=chunk_size, chunk_overlap=chunk_overlap, dry_run=dry_run)
 
     if not stats["documents"]:
         print(
@@ -47,6 +75,11 @@ def main():
             "Check the path, or drop files into data/ and run `python ingest.py`."
         )
         return 1
+
+    if stats.get("dry_run"):
+        print(f"\n[dry run] {stats['documents']} file(s) → ~{stats['chunks']} chunks. "
+              "Nothing was embedded or saved.")
+        return 0
 
     print(f"\nDone. Index now holds {stats['total_chunks']} chunks (from {stats['documents']} file(s)).")
     print('Ask it something:  python ask.py "your question here"')

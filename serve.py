@@ -162,7 +162,11 @@ class Handler(BaseHTTPRequestHandler):
             body = self._read_json()
             path = (body.get("path") or "").strip()
             replace = bool(body.get("replace"))
-        except ValueError:
+            dry_run = bool(body.get("dry_run"))
+            cs, co = body.get("chunk_size"), body.get("chunk_overlap")
+            chunk_size = int(cs) if cs not in (None, "") else None
+            chunk_overlap = int(co) if co not in (None, "") else None
+        except (ValueError, TypeError):
             self._send(400, "text/plain", "Bad request")
             return
         self._begin_stream()
@@ -170,15 +174,16 @@ class Handler(BaseHTTPRequestHandler):
             if not path:
                 self._event({"type": "error", "message": "Enter a file or folder path."})
                 return
-            log(f"ingest: path={path!r} replace={replace}")
+            log(f"ingest: path={path!r} replace={replace} dry_run={dry_run} chunk={chunk_size}/{chunk_overlap}")
 
             def emit(e):
                 self._event(e)
                 if e.get("type") == "done":
-                    log(f"ingest done: {e.get('documents')} file(s), "
-                        f"{e.get('chunks')} new chunk(s), total {e.get('total_chunks')}")
+                    log(f"ingest {'(dry-run) ' if e.get('dry_run') else ''}done: {e.get('documents')} file(s), "
+                        f"{e.get('chunks')} chunk(s), total {e.get('total_chunks')}")
 
-            ingest_paths([path], replace=replace, emit=emit)
+            ingest_paths([path], replace=replace, emit=emit,
+                         chunk_size=chunk_size, chunk_overlap=chunk_overlap, dry_run=dry_run)
         except (OllamaError, RuntimeError) as e:
             self._event({"type": "error", "message": str(e)})
         except (BrokenPipeError, ConnectionResetError):
