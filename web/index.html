@@ -166,11 +166,14 @@
     font:16px/1.5 var(--serif); padding:7px 0; max-height:168px; }
   .field textarea::placeholder { color:var(--faint); }
   .field .go { border-radius:11px; align-self:stretch; }
-  .newrow { max-width:760px; margin:9px auto 0; display:flex; justify-content:center; }
-  .newrow:has(> [hidden]) { display:none; }   /* no conversation → collapse the row entirely */
-  .newchat { font:11.5px var(--mono); color:var(--muted); background:transparent; border:1px solid var(--line);
-    border-radius:999px; padding:4px 13px; cursor:pointer; transition:color .15s,border-color .15s,background .15s; }
+  .newchat { flex:none; align-self:flex-end; width:36px; height:36px; border-radius:11px;
+    display:grid; place-items:center; font:17px/1 var(--mono); color:var(--muted);
+    background:transparent; border:1px solid var(--line); cursor:pointer;
+    transition:color .15s,border-color .15s,background .15s,transform .35s; }
   .newchat:hover { color:var(--accent); border-color:var(--accent); background:var(--accent-weak); }
+  .newchat:hover { transform:rotate(-180deg); }   /* the ⟲ spins on hover — playful "reset" cue */
+  .newchat:active { filter:brightness(.96); }
+  .newchat[hidden] { display:none; }
 </style>
 </head>
 <body>
@@ -222,10 +225,10 @@
 
   <footer>
     <div class="field">
+      <button class="newchat" id="newChat" title="New chat — clear the conversation and start fresh" aria-label="New chat" hidden>⟲</button>
       <textarea id="q" rows="1" placeholder="Ask a question about your documents…"></textarea>
       <button class="go" id="askBtn">Ask</button>
     </div>
-    <div class="newrow"><button class="newchat" id="newChat" title="Clear the conversation and start fresh" hidden>⟲ New chat</button></div>
   </footer>
 
 <script>
