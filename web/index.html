@@ -166,6 +166,11 @@
     font:16px/1.5 var(--serif); padding:7px 0; max-height:168px; }
   .field textarea::placeholder { color:var(--faint); }
   .field .go { border-radius:11px; align-self:stretch; }
+  .newrow { max-width:760px; margin:9px auto 0; display:flex; justify-content:center; }
+  .newrow:has(> [hidden]) { display:none; }   /* no conversation → collapse the row entirely */
+  .newchat { font:11.5px var(--mono); color:var(--muted); background:transparent; border:1px solid var(--line);
+    border-radius:999px; padding:4px 13px; cursor:pointer; transition:color .15s,border-color .15s,background .15s; }
+  .newchat:hover { color:var(--accent); border-color:var(--accent); background:var(--accent-weak); }
 </style>
 </head>
 <body>
@@ -175,7 +180,6 @@
         <span class="mark"><span class="sq"></span>rag-local</span>
         <span class="tag">local&nbsp;retrieval</span>
         <button class="toggle" id="ingestToggle" aria-expanded="false">＋ Ingest</button>
-        <button class="toggle" id="newChat" title="Clear the conversation and start fresh" hidden>⟲ New</button>
         <span class="status" id="pill" title=""><span class="dot off" id="dot"></span><span id="pillText">connecting</span></span>
       </div>
       <div class="meta" id="meta" hidden></div>
@@ -221,6 +225,7 @@
       <textarea id="q" rows="1" placeholder="Ask a question about your documents…"></textarea>
       <button class="go" id="askBtn">Ask</button>
     </div>
+    <div class="newrow"><button class="newchat" id="newChat" title="Clear the conversation and start fresh" hidden>⟲ New chat</button></div>
   </footer>
 
 <script>
