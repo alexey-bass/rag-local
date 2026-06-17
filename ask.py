@@ -11,7 +11,7 @@ import sys
 
 from rag import config
 from rag.ollama_client import OllamaError, chat_stream
-from rag.pipeline import SYSTEM_PROMPT, build_user_message, retrieve
+from rag.pipeline import OVERVIEW_PROMPT, SYSTEM_PROMPT, build_user_message, overview_user_message, retrieve
 from rag.store import VectorStore
 
 
@@ -21,7 +21,11 @@ def answer(store, question):
         return
     hits = retrieve(store, question)
     if not hits:
-        print("\nI couldn't find anything relevant to that in your indexed documents.\n")
+        # No passage matched — answer corpus-level questions from a computed overview.
+        print()
+        for piece in chat_stream(OVERVIEW_PROMPT, overview_user_message(store, question)):
+            print(piece, end="", flush=True)
+        print("\n")
         return
 
     user_msg = build_user_message(question, hits)

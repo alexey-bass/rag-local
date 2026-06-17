@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from rag import config
 from rag.indexer import ingest_paths
 from rag.ollama_client import OllamaError, chat_stream, health
-from rag.pipeline import SYSTEM_PROMPT, build_user_message, retrieve
+from rag.pipeline import OVERVIEW_PROMPT, SYSTEM_PROMPT, build_user_message, overview_user_message, retrieve
 from rag.store import VectorStore
 
 WEB_DIR = config.ROOT / "web"
@@ -134,10 +134,12 @@ class Handler(BaseHTTPRequestHandler):
                 return
             hits = retrieve(store, question)
             if not hits:
-                # Index has chunks, but none cleared RAG_MIN_SCORE — no relevant match.
+                # No passage cleared RAG_MIN_SCORE. Fall back to a computed collection overview
+                # so corpus-level questions ("how many docs?", "what companies?") still work.
                 self._event({"type": "sources", "sources": []})
-                self._event({"type": "token",
-                             "text": "I couldn't find anything relevant to that in your indexed documents."})
+                log('ask: "%s" -> no passage match; answering from corpus overview' % question[:80])
+                for piece in chat_stream(OVERVIEW_PROMPT, overview_user_message(store, question)):
+                    self._event({"type": "token", "text": piece})
                 self._event({"type": "done"})
                 return
             log('ask: "%s" -> %s' % (question[:80], ", ".join(

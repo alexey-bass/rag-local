@@ -4,6 +4,7 @@ Keeping the prompt + retrieval here means there's exactly one definition of how 
 question becomes an answer, regardless of which front-end calls it.
 """
 from . import config
+from .corpus import corpus_overview
 from .ollama_client import embed
 
 SYSTEM_PROMPT = (
@@ -38,3 +39,16 @@ def build_user_message(question, hits):
         blocks.append(f"[{n}] (from {rec['source']}, similarity {score:.2f})\n{rec['text']}")
     context = "\n\n".join(blocks)
     return f"Context passages:\n\n{context}\n\n---\nQuestion: {question}"
+
+
+OVERVIEW_PROMPT = (
+    "The user is asking about their indexed document collection, but no individual passage "
+    "matched the question. Use the collection overview below to answer questions about the "
+    "collection's size or composition (document counts, companies, etc.), quoting its numbers. "
+    "If the question needs specifics not present in the overview, say no matching document was found."
+)
+
+
+def overview_user_message(store, question):
+    """Fallback context for corpus-level questions when no passage clears the score floor."""
+    return f"Collection overview:\n{corpus_overview(store)}\n\n---\nQuestion: {question}"

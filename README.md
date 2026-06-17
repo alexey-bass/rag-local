@@ -16,7 +16,7 @@ about them, citing the passages it used.
 your files / folders   (data/, or any path you paste — recursive)
       │  loader.py        read .txt / .md / .pdf
       ▼
-   chunker.py             split into overlapping chunks
+   chunker.py             context-anchored chunks (each prefixed with its doc's identity)
       │
       ▼  ollama embed     nomic-embed-text  → vectors
    store.py               save index/  (embeddings.npy + records.json)
@@ -83,6 +83,8 @@ then ask questions. It binds to `127.0.0.1` only. Features:
   When connected it shows the Ollama version and the LLM build, e.g. `Ollama 0.30.8 · LLM llama3.2:latest (3.2B, Q4_K_M)`.
 - **`replace index` checkbox** — *off*: add/update the pasted path, keeping the rest of the index;
   *on*: wipe the index and rebuild from only this path.
+- **Collection questions** — "how many docs?", "what companies?" are answered from a computed
+  index overview, since semantic search alone can't count or aggregate.
 
 ### Logs
 
@@ -128,6 +130,7 @@ All knobs are env vars (see `rag/config.py`):
 | `RAG_EMBED_MODEL` | `nomic-embed-text` | embedding model |
 | `RAG_TEMPERATURE` | `0.2` | generation sampling temp — low = consistent, grounded answers (set `0` for fully deterministic) |
 | `RAG_TOP_K` | `5` | chunks retrieved per question |
+| `RAG_MIN_SCORE` | `0.6` | drop retrieved chunks below this cosine score (`0` = keep all); if nothing clears it, a corpus-overview fallback answers |
 | `RAG_CHUNK_SIZE` | `900` | characters per chunk |
 | `RAG_CHUNK_OVERLAP` | `150` | overlap between chunks |
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama server URL |

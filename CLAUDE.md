@@ -22,14 +22,19 @@ keys: embeddings *and* generation both run through a local **Ollama** server.
 
 - `rag/config.py` — all settings; every knob is env-overridable (`RAG_*`, `OLLAMA_HOST`).
 - `rag/ollama_client.py` — `embed()`, `chat_stream()`, `health()`. Raises `OllamaError`
-  with a user-friendly message. `health()` **never raises** (the UI polls it every 5s).
+  with a user-friendly message. `health()` **never raises** (the UI polls it every 60s).
 - `rag/loader.py` — `load_documents(paths)`: file or dir (recursive), `.txt/.md/.pdf`.
   Returns dicts `{path (absolute), source (display label), text}`.
-- `rag/chunker.py` — paragraph-aware chunking with overlap.
+- `rag/chunker.py` — **context-anchored, structure-aware** chunking: every chunk is prefixed
+  with the document's identity (title + Company/Location/Track parsed from the front-matter)
+  and split on line boundaries (no mid-word cuts). This is what makes entity/field queries work.
 - `rag/store.py` — `VectorStore`: L2-normalized embeddings + cosine search. `add()`,
   `search()`, `remove_paths()` (upsert), `save()`/`load()` → `index/`.
-- `rag/pipeline.py` — `retrieve()`, `build_user_message()`, `SYSTEM_PROMPT`. **Shared** by
-  `ask.py` and `serve.py`. Change retrieval/prompt logic HERE, not in a front-end.
+- `rag/corpus.py` — `corpus_overview(store)`: computed collection stats (doc/chunk counts,
+  top companies) used to answer aggregate/meta questions semantic search can't.
+- `rag/pipeline.py` — `retrieve()` (filters by `MIN_SCORE`), `build_user_message()`,
+  `SYSTEM_PROMPT`, plus `OVERVIEW_PROMPT` + `overview_user_message()` for the corpus fallback.
+  **Shared** by `ask.py` and `serve.py`. Change retrieval/prompt logic HERE, not in a front-end.
 - `rag/indexer.py` — `ingest_paths(paths, replace, emit)`: load → chunk → embed → upsert →
   save. **Shared** by `ingest.py` and `serve.py`. `emit(event)` streams progress.
 - `ingest.py` / `ask.py` — CLIs. `serve.py` — stdlib web server. `web/index.html` —
@@ -43,6 +48,11 @@ keys: embeddings *and* generation both run through a local **Ollama** server.
 - **`records` and `embeddings` rows are parallel** in `VectorStore`. Any op that drops
   records must reindex the matrix identically (see `remove_paths`).
 - Embeddings are normalized at `add()` time → search is a plain dot product.
+- **Context anchoring**: `chunker.py` prefixes each chunk with its document's header so body
+  chunks aren't anonymous. Re-chunking changes chunk text → **re-ingest** to take effect.
+- **Score floor**: `retrieve()` drops hits below `config.MIN_SCORE` (default 0.6). If nothing
+  clears it, both front-ends fall back to `corpus_overview` (so "how many docs?" works) —
+  semantic search alone can't count or aggregate.
 - **Streaming protocol**: `/api/ask` and `/api/ingest` stream **NDJSON** (one JSON object
   per line) over an HTTP/1.0 connection-close response. Event `type`s: `status`, `loaded`,
   `chunked`, `embed`, `sources`, `token`, `done`, `error`. The browser reads it via
@@ -63,6 +73,9 @@ keys: embeddings *and* generation both run through a local **Ollama** server.
   browser refresh.
 - **Changing the embedding model or chunk settings invalidates the index** — re-run
   `ingest.py`. The index records its `embed_model`; mixing models raises an error.
+- **Keep docs in sync (project rule):** when you change app behavior, features, config knobs,
+  or architecture, update `README.md` and this `CLAUDE.md` in the same change. Docs must
+  reflect the current app.
 
 ## Verifying (no formal test suite)
 

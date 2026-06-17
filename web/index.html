@@ -67,6 +67,7 @@
   .meta span { white-space:nowrap; }
   .meta b { color:var(--ink); font-weight:600; }
   .meta i { color:var(--accent); font-style:normal; }
+  .meta .help { cursor:help; text-decoration:underline dotted var(--faint); text-underline-offset:3px; }
 
   /* ── ingest ──────────────────────────────────────────────── */
   .ingest { display:flex; gap:8px; align-items:center; }
@@ -191,9 +192,19 @@ function setBusy(b){ busy=b; askBtn.disabled=b; ingestBtn.disabled=b; askBtn.tex
 
 // ── backend status indicator (AJAX polling) ──────────────────
 function setDot(state,text,tip){ dot.className='dot '+state; pillText.textContent=text; pill.title=tip||''; }
-function addMeta(label,value,accent){
+function addMeta(label,value,accent,tip){
   const s=document.createElement('span'); s.append(label+' ');
-  const tag=document.createElement(accent?'i':'b'); tag.textContent=value; s.appendChild(tag); meta.appendChild(s);
+  const tag=document.createElement(accent?'i':'b'); tag.textContent=value;
+  if(tip){ tag.title=tip; tag.classList.add('help'); }
+  s.appendChild(tag); meta.appendChild(s);
+}
+function modelTip(s){
+  const t=[`${s.gen_version||s.gen_model} — the local LLM (run via Ollama) that writes the answers.`];
+  if(s.gen_params) t.push(`${s.gen_params}: parameter count = model size. More params = smarter, but slower and more memory.`);
+  if(s.gen_quant){ const b=(s.gen_quant.match(/q(\d+)/i)||[])[1];
+    t.push(`${s.gen_quant}: quantization${b?` (~${b}-bit weights)`:''} — weights compressed to save RAM and run faster, with minor quality loss.`); }
+  t.push(`Swap it via RAG_GEN_MODEL (e.g. llama3.1:8b) for higher answer quality.`);
+  return t.join('\n');
 }
 async function refreshStatus(){
   try {
@@ -205,10 +216,12 @@ async function refreshStatus(){
     } else {
       setDot('ok','connected',`Ollama running${s.gen_digest?' · '+s.gen_digest:''}`);
       const spec=[s.gen_params,s.gen_quant].filter(Boolean).join(', ');
+      const modelName=(s.gen_version||s.gen_model).replace(/:latest$/,'');  // ":latest" is noise; size/quant below is the meaningful label
       meta.innerHTML='';
-      addMeta('ollama', s.ollama_version||'—');
-      addMeta('model', (s.gen_version||s.gen_model)+(spec?` (${spec})`:''), true);
-      addMeta('index', s.index_exists?`${s.chunks.toLocaleString()} chunks`:'empty');
+      addMeta('ollama', s.ollama_version||'—', false, `Ollama backend version — the local server running the models.`);
+      addMeta('model', modelName+(spec?` (${spec})`:''), true, modelTip(s));
+      addMeta('index', s.index_exists?`${s.chunks.toLocaleString()} chunks`:'empty', false,
+        `Searchable chunks in the index${s.embed_model?` · embeddings via ${s.embed_model}`:''}.`);
       meta.hidden=false;
     }
   } catch { meta.hidden=true; setDot('off','server offline','The rag1 web server is not responding.'); }
@@ -305,7 +318,7 @@ async function ingest(){
 function scrollDown(){ const m=document.querySelector('main'); m.scrollTop=m.scrollHeight; }
 
 refreshStatus();
-setInterval(refreshStatus,5000);   // keep the backend indicator live
+setInterval(refreshStatus,60000);  // heartbeat once a minute (ask/ingest refresh immediately)
 qBox.focus();
 </script>
 </body>
