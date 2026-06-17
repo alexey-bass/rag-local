@@ -7,9 +7,13 @@ DATA_DIR = ROOT / "data"      # you drop your .txt/.md/.pdf files here
 INDEX_DIR = ROOT / "index"    # the built vector index lives here
 
 # Ollama server + models. Override with RAG_GEN_MODEL / RAG_EMBED_MODEL / OLLAMA_HOST.
+# Generation defaults to a CLOUD model (`*-cloud`): bigger + faster than anything that fits on
+# a laptop, but it runs on ollama.com, so the question + retrieved passages leave the machine
+# (one-time `ollama signin`). Embeddings always run locally. Set RAG_GEN_MODEL to a local model
+# (e.g. llama3.2, gemma4:e2b) to run generation fully offline too.
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 EMBED_MODEL = os.environ.get("RAG_EMBED_MODEL", "nomic-embed-text")
-GEN_MODEL = os.environ.get("RAG_GEN_MODEL", "llama3.2")
+GEN_MODEL = os.environ.get("RAG_GEN_MODEL", "gemma4:31b-cloud")
 
 # Embedding task prefixes. nomic-embed-text is an ASYMMETRIC model: it was trained with
 # a task instruction on every input, and the document side and query side use *different*

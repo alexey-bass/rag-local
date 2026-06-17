@@ -4,9 +4,11 @@ Guidance for working in this repo.
 
 ## What this is
 
-**rag1** — a tiny, fully-local Retrieval-Augmented Generation playground. It indexes the
-user's own documents and answers questions over them, citing sources. No cloud, no API
-keys: embeddings *and* generation both run through a local **Ollama** server.
+**rag1** — a tiny Retrieval-Augmented Generation playground over **Ollama**. It indexes the
+user's own documents and answers questions over them, citing sources. Embeddings + retrieval
+run **locally** (documents never leave the machine); **generation** defaults to an Ollama
+**cloud** model (`gemma4:31b-cloud`, after a one-time `ollama signin`) but can use any local
+model via `RAG_GEN_MODEL` — so it can run 100% offline when you want.
 
 ## Stack & dependencies
 
@@ -15,8 +17,11 @@ keys: embeddings *and* generation both run through a local **Ollama** server.
 - `serve.py` is **pure Python stdlib** (`http.server`). The Ollama client uses `urllib`.
   **Do not add** Flask/FastAPI/requests/torch/sentence-transformers/chromadb — the design
   is deliberately minimal and Python-3.14-friendly.
-- Backend: Ollama at `http://localhost:11434` (`ollama serve`), models `nomic-embed-text`
-  (embeddings) and `llama3.2` (generation). Installed via Homebrew on this machine.
+- Backend: Ollama at `http://localhost:11434` (`ollama serve`), Homebrew install. Embedding model
+  `nomic-embed-text` (always local). Generation defaults to `gemma4:31b-cloud` (runs on ollama.com,
+  needs `ollama signin`); override with `RAG_GEN_MODEL` for any local model (`llama3.2`, `gemma4:e2b`,
+  …). Cloud models are detected by the `*-cloud` suffix: `/api/status` reports them `gen_ready`
+  (and `gen_cloud: true`) without their appearing in the local model list, since they aren't pulled.
 
 ## Architecture — one code path, two front-ends
 

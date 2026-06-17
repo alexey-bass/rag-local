@@ -89,14 +89,19 @@ class Handler(BaseHTTPRequestHandler):
             by_base = {m.split(":", 1)[0]: m for m in h["models"]}  # base name -> full tag
             gen_full = by_base.get(config.GEN_MODEL.split(":", 1)[0])
             gen_det = h["model_details"].get(gen_full, {})
+            # Cloud models (`*-cloud`) run on ollama.com, so they never appear in the local model
+            # list — treat them as ready as long as Ollama itself is reachable (a missing sign-in
+            # surfaces as an error on the actual /api/ask, not here).
+            gen_cloud = config.GEN_MODEL.endswith("-cloud")
             self._send(200, "application/json", json.dumps({
                 "index_exists": store is not None,
                 "chunks": len(store) if store else 0,
                 "gen_model": config.GEN_MODEL,
+                "gen_cloud": gen_cloud,
                 "embed_model": config.EMBED_MODEL,
                 "ollama": h["ok"],
                 "ollama_version": h["version"],
-                "gen_ready": config.GEN_MODEL.split(":", 1)[0] in by_base,
+                "gen_ready": gen_cloud or config.GEN_MODEL.split(":", 1)[0] in by_base,
                 "embed_ready": config.EMBED_MODEL.split(":", 1)[0] in by_base,
                 "gen_version": gen_full,
                 "gen_params": gen_det.get("parameter_size"),

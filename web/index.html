@@ -247,6 +247,10 @@ function addMeta(label,value,accent,tip){
   s.appendChild(tag); meta.appendChild(s);
 }
 function modelTip(s){
+  if(s.gen_cloud) return `${s.gen_model} — runs on Ollama's cloud (ollama.com), not your machine.\n`+
+    `Faster and higher quality, but your question and the retrieved passages are sent to the cloud.\n`+
+    `Needs a one-time sign-in:  ollama signin\n`+
+    `Set RAG_GEN_MODEL to a local model (e.g. llama3.2) to keep generation fully offline.`;
   const t=[`${s.gen_version||s.gen_model} — the local LLM (run via Ollama) that writes the answers.`];
   if(s.gen_params) t.push(`${s.gen_params}: parameter count = model size. More params = smarter, but slower and more memory.`);
   if(s.gen_quant){ const b=(s.gen_quant.match(/q(\d+)/i)||[])[1];
@@ -264,10 +268,10 @@ async function refreshStatus(){
     } else {
       setDot('ok','connected',`Ollama running${s.gen_digest?' · '+s.gen_digest:''}`);
       const spec=[s.gen_params,s.gen_quant].filter(Boolean).join(', ');
-      const modelName=(s.gen_version||s.gen_model).replace(/:latest$/,'');  // ":latest" is noise; size/quant below is the meaningful label
+      const modelName=(s.gen_version||s.gen_model).replace(/:latest$/,'').replace(/-cloud$/,'');  // ":latest"/"-cloud" are noise; size/quant or the ☁ tag below carries the meaning
       meta.innerHTML='';
-      addMeta('ollama', s.ollama_version||'—', false, `Ollama backend version — the local server running the models.`);
-      addMeta('model', modelName+(spec?` (${spec})`:''), true, modelTip(s));
+      addMeta('ollama', s.ollama_version||'—', false, `Ollama backend version — the local server running embeddings (and local models).`);
+      addMeta('model', modelName+(s.gen_cloud?' ☁ cloud':'')+(spec?` (${spec})`:''), true, modelTip(s));
       addMeta('index', s.index_exists?`${s.chunks.toLocaleString()} chunks`:'empty', false,
         `Searchable chunks in the index${s.embed_model?` · embeddings via ${s.embed_model}`:''}.`);
       meta.hidden=false;

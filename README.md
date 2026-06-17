@@ -1,10 +1,13 @@
 # rag1 — a tiny local RAG playground
 
-A minimal Retrieval-Augmented Generation system that runs **100% on your machine** —
-no API keys, no cloud, no cost. It indexes your own documents and answers questions
-about them, citing the passages it used.
+A minimal Retrieval-Augmented Generation system built on [Ollama](https://ollama.com): it
+indexes your own documents and answers questions about them, citing the passages it used.
+**Embeddings and retrieval always run locally** — your documents never leave the machine.
+**Generation** uses a fast Ollama **cloud** model by default, or any local model you prefer.
 
-- **Embeddings + generation:** [Ollama](https://ollama.com) (`nomic-embed-text` + `llama3.2`)
+- **Embeddings (local):** `nomic-embed-text`
+- **Generation:** `gemma4:31b-cloud` by default (after a one-time `ollama signin`), or a local
+  model like `llama3.2` / `gemma4:e2b` to run fully offline — see [Choosing a model](#choosing-a-generation-model)
 - **Vector store:** numpy cosine similarity (no database)
 - **Inputs:** `.txt`, `.md`, `.pdf` — point it at any file or folder (recursive)
 - **Interfaces:** a streaming web UI *and* a CLI
@@ -24,7 +27,7 @@ your files / folders   (data/, or any path you paste — recursive)
 ask "question?"
       │  ollama embed     "search_query: " + question → vector
       ▼  pipeline.retrieve dense cosine ⊕ BM25 lexical, fused (RRF)  → top-k chunks
-   ollama chat            llama3.2 answers using only those chunks  → answer + sources
+   ollama chat            the model (gemma4:31b-cloud by default) answers from those chunks → answer + sources
 ```
 
 The two retrieval ideas that make this work well on real documents:
@@ -69,14 +72,28 @@ brew install ollama       # macOS
 ollama serve              # leave running in a terminal (or it runs as a background service)
 ```
 
-**2. Pull the two models** (~2.5 GB total):
+**2. Pull the embedding model** (always runs locally, ~275 MB):
 
 ```bash
 ollama pull nomic-embed-text
-ollama pull llama3.2
 ```
 
-**3. Python deps** (a virtualenv `.venv` is already created here):
+**3. Set up generation.** By default rag1 writes answers with a **cloud** model
+(`gemma4:31b-cloud`) — bigger and faster than a laptop can run, but your question and the
+retrieved passages are sent to ollama.com. Connect this machine to your account once:
+
+```bash
+ollama signin     # opens a browser to sign in to ollama.com (needed only for *-cloud models)
+```
+
+Prefer to stay fully offline? Skip the sign-in, pull a local model, and point rag1 at it:
+
+```bash
+ollama pull llama3.2
+export RAG_GEN_MODEL=llama3.2      # see "Choosing a generation model" for more options
+```
+
+**4. Python deps** (a virtualenv `.venv` is already created here):
 
 ```bash
 .venv/bin/python -m pip install -r requirements.txt
@@ -97,7 +114,8 @@ then ask questions. It binds to `127.0.0.1` only. Features:
   **⟲ New** clears the conversation and starts fresh.
 - **Source snippets** — every answer lists the retrieved chunks with similarity scores; expand to read them.
 - **Backend indicator** (top-right pill): 🟢 connected · 🟡 model missing · 🔴 Ollama offline · ⚪ server offline.
-  When connected it shows the Ollama version and the LLM build, e.g. `Ollama 0.30.8 · LLM llama3.2 (3.2B, Q4_K_M)` (hover the model for an explanation).
+  When connected it shows the Ollama version and the model — a local build like `llama3.2 (3.2B, Q4_K_M)`,
+  or a cloud model tagged `gemma4:31b ☁ cloud` (hover the model for an explanation).
 - **Collapsible ingest panel** — hidden by default; the `＋ Ingest` chip opens it. Includes
   **Analyze** (profiles the docs at a path and recommends a chunk size — click a size chip to
   apply it), **Preview** (dry-run: counts files/chunks without embedding), per-ingest
@@ -148,6 +166,32 @@ Extra options: `--dry-run` (scan + count without embedding or saving) and `--chu
 .venv/bin/python ingest.py --chunk-size 1200 --replace ~/papers
 ```
 
+## Choosing a generation model
+
+Generation is the only part that can run in the cloud — **embeddings always stay local**, so the
+index is unaffected by which generation model you pick. Switch any time, no re-ingest: set
+`RAG_GEN_MODEL` per command, or `export` it for the session.
+
+```bash
+# Cloud (the default) — needs `ollama signin`; biggest + fastest, but queries leave your machine:
+RAG_GEN_MODEL=gemma4:31b-cloud .venv/bin/python serve.py      # the default
+RAG_GEN_MODEL=gemma4:e4b-cloud .venv/bin/python ask.py "..."  # a smaller cloud option
+
+# Local — fully offline; pull once, then select it:
+ollama pull llama3.2   && RAG_GEN_MODEL=llama3.2   .venv/bin/python serve.py        # small & quick (~2 GB)
+ollama pull gemma4:e2b && RAG_GEN_MODEL=gemma4:e2b .venv/bin/python ask.py "..."     # local Gemma 4 (~7 GB)
+ollama pull qwen2.5    && RAG_GEN_MODEL=qwen2.5    .venv/bin/python ask.py "..."     # another good local option
+
+# Make one the default for the whole session:
+export RAG_GEN_MODEL=llama3.2
+.venv/bin/python serve.py
+```
+
+Cloud models (the `*-cloud` tags) run on ollama.com after `ollama signin`; the web UI marks them
+`☁ cloud` in the status pill, and your question + retrieved passages are sent there. To run rag1
+**100% offline**, point `RAG_GEN_MODEL` at any local model — `nomic-embed-text` already keeps
+embeddings on-device.
+
 ## Pick good settings (measure, don't guess)
 
 Two helper CLIs turn chunk-size and retrieval choices into numbers, before and after you embed:
@@ -173,8 +217,8 @@ All knobs are env vars (see `rag/config.py`):
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `RAG_GEN_MODEL` | `llama3.2` | generation model (try `llama3.1:8b`, `qwen2.5`, `mistral`, `gemma3n:e2b`) |
-| `RAG_EMBED_MODEL` | `nomic-embed-text` | embedding model |
+| `RAG_GEN_MODEL` | `gemma4:31b-cloud` | generation model — cloud (`*-cloud`, needs `ollama signin`) or local (`llama3.2`, `gemma4:e2b`, `qwen2.5`); see [Choosing a generation model](#choosing-a-generation-model) |
+| `RAG_EMBED_MODEL` | `nomic-embed-text` | embedding model (kept local) |
 | `RAG_HISTORY_TURNS` | `6` | prior Q&A exchanges replayed as conversation context for follow-ups |
 | `RAG_CONDENSE` | `1` | rewrite a follow-up into a standalone query before retrieval (`0` = off; one extra LLM call) |
 | `RAG_EMBED_DOC_PREFIX` | `search_document: ` | task prefix added to documents at index time (set `""` for a model that doesn't use prefixes) |
