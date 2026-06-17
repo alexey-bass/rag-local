@@ -36,10 +36,17 @@ def _open(path, payload):
         ) from e
 
 
-def embed(texts):
-    """Embed a string or list of strings. Returns an (N, dim) float32 numpy array."""
+def embed(texts, prefix=""):
+    """Embed a string or list of strings. Returns an (N, dim) float32 numpy array.
+
+    `prefix` is prepended to each input before embedding (e.g. nomic's
+    "search_document: " / "search_query: " task instructions). It affects only what
+    is sent to the model — callers keep their original, un-prefixed text.
+    """
     if isinstance(texts, str):
         texts = [texts]
+    if prefix:
+        texts = [prefix + t for t in texts]
     resp = _open("/api/embed", {"model": config.EMBED_MODEL, "input": texts})
     body = json.loads(resp.read())
     if "embeddings" not in body:

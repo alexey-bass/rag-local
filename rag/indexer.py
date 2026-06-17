@@ -56,16 +56,21 @@ def ingest_paths(paths, replace=False, emit=_noop, chunk_size=None, chunk_overla
 
     # Start fresh, or load the existing index to add to.
     if replace:
-        store = VectorStore(embed_model=config.EMBED_MODEL)
+        store = VectorStore(embed_model=config.EMBED_MODEL, embed_doc_prefix=config.EMBED_DOC_PREFIX)
     else:
         try:
             store = VectorStore.load()
         except FileNotFoundError:
-            store = VectorStore(embed_model=config.EMBED_MODEL)
+            store = VectorStore(embed_model=config.EMBED_MODEL, embed_doc_prefix=config.EMBED_DOC_PREFIX)
         if len(store) and store.embed_model and store.embed_model != config.EMBED_MODEL:
             raise RuntimeError(
                 f"Existing index was built with embedding model '{store.embed_model}', but "
                 f"current model is '{config.EMBED_MODEL}'. Re-ingest with replace to rebuild."
+            )
+        if len(store) and store.embed_doc_prefix != config.EMBED_DOC_PREFIX:
+            raise RuntimeError(
+                f"Existing index was built with embed doc-prefix {store.embed_doc_prefix!r}, but "
+                f"current prefix is {config.EMBED_DOC_PREFIX!r}. Re-ingest with replace to rebuild."
             )
 
     # Upsert: clear any prior chunks for the files we're about to (re)ingest.
@@ -74,11 +79,12 @@ def ingest_paths(paths, replace=False, emit=_noop, chunk_size=None, chunk_overla
         emit({"type": "status", "message": f"Replacing {removed} existing chunk(s) for these files"})
 
     for start in range(0, len(texts), BATCH):
-        vectors = embed(texts[start : start + BATCH])
+        vectors = embed(texts[start : start + BATCH], prefix=config.EMBED_DOC_PREFIX)
         store.add(vectors, records[start : start + BATCH])
         emit({"type": "embed", "current": min(start + BATCH, len(texts)), "total": len(texts)})
 
     store.embed_model = config.EMBED_MODEL
+    store.embed_doc_prefix = config.EMBED_DOC_PREFIX
     store.save()
     stats = {
         "documents": len(docs),

@@ -1,0 +1,18 @@
+[
+  {"q": "Tell me about the Infrastructure Engineer role at Tenstreet", "expect": "tenstreet"},
+  {"q": "What is the QA Engineer for Mobile position at Veeva Systems?", "expect": "veeva"},
+  {"q": "Describe the Platform Engineer opening at GlobalDots", "expect": "globaldots"},
+  {"q": "What does the remote DevOps Engineer job at Lumiform involve?", "expect": "lumiform"},
+  {"q": "Tell me about the Junior QA Engineer role at Crisalix", "expect": "crisalix"},
+  {"q": "What is the AWS Cloud / DevOps Engineer position at Delaney & Bourton?", "expect": "delaney-bourton"},
+  {"q": "Which company is hiring a DevOps engineer who is a Kubernetes expert on AKS?", "expect": "esprimo"},
+  {"q": "Which role is an AI-first QA engineer focused on test automation?", "expect": "everreal"},
+  {"q": "Which infrastructure engineer position is 100% home office and based in Germany?", "expect": "techculture"},
+  {"q": "Which job is a founding platform and infrastructure engineer at an early-stage startup?", "expect": "optiak"},
+  {"q": "Which QA automation role uses Playwright and TypeScript?", "expect": "alten"},
+  {"q": "Which posting is for an Administrador de Sistemas y Cloud Engineer in Spanish?", "expect": "quental"},
+  {"q": "Which job is a Técnico Helpdesk N1 position?", "expect": "serem"},
+  {"q": "Tell me about the Site Reliability Engineer role at Lognext", "expect": "lognext"},
+  {"q": "Which company is hiring a Líder Técnico SRE?", "expect": "m-gt-consulting"},
+  {"q": "Which role is a Site Reliability and Platform engineer at Open-Xchange?", "expect": "open-xchange"}
+]

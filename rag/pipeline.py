@@ -3,8 +3,11 @@
 Keeping the prompt + retrieval here means there's exactly one definition of how a
 question becomes an answer, regardless of which front-end calls it.
 """
+import numpy as np
+
 from . import config
 from .corpus import corpus_overview
+from .lexical import BM25, rrf, tokenize
 from .ollama_client import embed
 
 SYSTEM_PROMPT = (
@@ -18,18 +21,72 @@ SYSTEM_PROMPT = (
 )
 
 
-def retrieve(store, question, k=None, min_score=None):
-    """Embed the question and return the top-k [(record, score), ...] hits.
+def _bm25_for(store):
+    """Lazily build (and cache on the store) a BM25 index over the chunk texts.
 
-    Hits scoring below `min_score` (cosine similarity, defaults to
-    config.MIN_SCORE) are dropped, so an off-topic question yields few or zero
-    passages instead of filler near-misses. Pass min_score=0 to keep all top-k.
+    Rebuilt whenever the store's chunk count changes, so re-ingesting refreshes it.
+    The cache lives on the store instance, which both front-ends keep alive across
+    questions (serve.py caches it; ask.py loads it once per process).
     """
+    n = len(store)
+    if getattr(store, "_bm25", None) is None or getattr(store, "_bm25_n", None) != n:
+        store._bm25 = BM25([tokenize(r["text"]) for r in store.records])
+        store._bm25_n = n
+    return store._bm25
+
+
+def retrieve(store, question, k=None, min_score=None):
+    """Retrieve the most relevant [(record, cosine_score), ...] passages for a question.
+
+    Pipeline:
+      1. Embed the question (with the query-side task prefix) and score it against
+         every chunk by cosine similarity.
+      2. Off-topic gate: if even the best chunk is below `min_score`, return [] so the
+         front-ends fall back to the computed corpus overview.
+      3. If hybrid retrieval is on, fuse the dense ranking with a BM25 lexical ranking
+         via RRF — this pulls exact-token matches (company names, IDs, versions) up.
+      4. Trim the tail relative to the top hit (drop chunks below
+         config.MIN_SCORE_RATIO * top_score) and return up to k passages.
+
+    Scores returned are always the cosine similarity, so the UI's "similarity" stays meaningful.
+    """
+    k = k or config.TOP_K
     if min_score is None:
         min_score = config.MIN_SCORE
-    query_vec = embed(question)[0]
-    hits = store.search(query_vec, k=k)
-    return [(rec, score) for rec, score in hits if score >= min_score]
+
+    query_vec = embed(question, prefix=config.EMBED_QUERY_PREFIX)[0]
+    dense = store.scores(query_vec)
+    if dense.size == 0:
+        return []
+
+    order = np.argsort(-dense)
+    top_score = float(dense[order[0]])
+    if top_score < min_score:  # nothing is even plausibly on-topic -> overview fallback
+        return []
+
+    pool = max(config.RETRIEVE_POOL, k)
+    dense_pool = [int(i) for i in order[:pool]]
+
+    if config.HYBRID:
+        bm = _bm25_for(store)
+        terms = bm.discriminating(tokenize(question), config.LEXICAL_MAX_DF_RATIO)
+        lex_pool = []
+        if terms:  # only fuse when the query has a distinguishing token to match on
+            lex = bm.scores(terms)
+            lex_pool = [int(i) for i in np.argsort(-lex)[:pool] if lex[i] > 0]
+        ranked = rrf([dense_pool, lex_pool]) if lex_pool else dense_pool
+    else:
+        ranked = dense_pool
+
+    floor = config.MIN_SCORE_RATIO * top_score
+    hits = []
+    for i in ranked:
+        score = float(dense[i])
+        if score >= floor:  # keep the cosine floor so BM25 can't smuggle in off-topic chunks
+            hits.append((store.records[i], score))
+        if len(hits) >= k:
+            break
+    return hits
 
 
 def build_user_message(question, hits):

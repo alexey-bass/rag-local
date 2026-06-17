@@ -21,10 +21,13 @@ def _normalize(mat):
 
 
 class VectorStore:
-    def __init__(self, embeddings=None, records=None, embed_model=None):
+    def __init__(self, embeddings=None, records=None, embed_model=None, embed_doc_prefix=None):
         self.embeddings = np.zeros((0, 0), dtype=np.float32) if embeddings is None else embeddings
         self.records = records or []
         self.embed_model = embed_model
+        # The doc-side task prefix the embeddings were built with (see config.EMBED_DOC_PREFIX).
+        # Stored so a later ingest/query can detect a stale index built under a different scheme.
+        self.embed_doc_prefix = embed_doc_prefix
 
     def __len__(self):
         return len(self.records)
@@ -47,16 +50,26 @@ class VectorStore:
             self.records = [self.records[i] for i in keep]
         return removed
 
-    def search(self, query_vec, k=None):
-        """Return [(record, score), ...] for the top-k most similar chunks."""
-        k = k or config.TOP_K
+    def scores(self, query_vec):
+        """Cosine similarity of `query_vec` against every stored chunk (a length-N array).
+
+        Embeddings are L2-normalized at add() time, so this is just a normalized dot
+        product. Returned in record order, so callers can index into `self.records`.
+        """
         if self.embeddings.size == 0:
-            return []
+            return np.zeros(0, dtype=np.float32)
         q = np.asarray(query_vec, dtype=np.float32).reshape(-1)
         norm = np.linalg.norm(q)
         if norm:
             q = q / norm
-        scores = self.embeddings @ q
+        return self.embeddings @ q
+
+    def search(self, query_vec, k=None):
+        """Return [(record, score), ...] for the top-k most similar chunks."""
+        k = k or config.TOP_K
+        scores = self.scores(query_vec)
+        if scores.size == 0:
+            return []
         top = np.argsort(-scores)[:k]
         return [(self.records[i], float(scores[i])) for i in top]
 
@@ -65,7 +78,11 @@ class VectorStore:
         d.mkdir(parents=True, exist_ok=True)
         np.save(d / "embeddings.npy", self.embeddings)
         (d / "records.json").write_text(
-            json.dumps({"embed_model": self.embed_model, "records": self.records}, ensure_ascii=False, indent=2),
+            json.dumps(
+                {"embed_model": self.embed_model, "embed_doc_prefix": self.embed_doc_prefix,
+                 "records": self.records},
+                ensure_ascii=False, indent=2,
+            ),
             encoding="utf-8",
         )
 
@@ -76,4 +93,4 @@ class VectorStore:
         if not emb.exists() or not rec.exists():
             raise FileNotFoundError(f"No index found in {d}. Build one with:  python ingest.py")
         meta = json.loads(rec.read_text(encoding="utf-8"))
-        return cls(np.load(emb), meta["records"], meta.get("embed_model"))
+        return cls(np.load(emb), meta["records"], meta.get("embed_model"), meta.get("embed_doc_prefix"))
