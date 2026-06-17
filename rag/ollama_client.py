@@ -87,14 +87,21 @@ def health(timeout=2.0):
     return {"ok": True, "version": version, "models": list(details.keys()), "model_details": details}
 
 
-def chat_stream(system, user):
-    """Stream a chat completion. Yields text chunks as the model produces them."""
+def chat(messages):
+    """Non-streaming chat: return the full assistant reply as one string.
+
+    Used for short internal calls (e.g. condensing a follow-up into a standalone query)
+    where we want the whole result, not a stream.
+    """
+    return "".join(chat_stream(messages))
+
+
+def chat_stream(messages):
+    """Stream a chat completion. `messages` is a list of {role, content} dicts
+    (system + alternating user/assistant turns). Yields text chunks as produced."""
     payload = {
         "model": config.GEN_MODEL,
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
+        "messages": messages,
         "stream": True,
         "options": {"temperature": config.GEN_TEMPERATURE},
     }

@@ -92,6 +92,9 @@ Open the page, **paste a file or folder path** (searched recursively), click **I
 then ask questions. It binds to `127.0.0.1` only. Features:
 
 - **Streaming answers** with clickable `[1]`/`[2]` citation chips that jump to the source.
+- **Conversational follow-ups** — the thread is remembered, so "what about its salary?" resolves
+  against the previous answer (a follow-up is rewritten into a standalone query *before* retrieval).
+  **⟲ New** clears the conversation and starts fresh.
 - **Source snippets** — every answer lists the retrieved chunks with similarity scores; expand to read them.
 - **Backend indicator** (top-right pill): 🟢 connected · 🟡 model missing · 🔴 Ollama offline · ⚪ server offline.
   When connected it shows the Ollama version and the LLM build, e.g. `Ollama 0.30.8 · LLM llama3.2 (3.2B, Q4_K_M)` (hover the model for an explanation).
@@ -127,7 +130,7 @@ Run `serve.py` in a terminal to watch them live.
 
 # Ask away:
 .venv/bin/python ask.py "what are the main points?"
-.venv/bin/python ask.py            # interactive REPL
+.venv/bin/python ask.py            # interactive REPL — follow-ups keep context; "new" resets, "exit" quits
 ```
 
 **Re-ingesting a path updates it** (no duplicate chunks); ingesting a new path
@@ -170,8 +173,10 @@ All knobs are env vars (see `rag/config.py`):
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `RAG_GEN_MODEL` | `llama3.2` | generation model (try `llama3.1:8b`, `qwen2.5`, `mistral`) |
+| `RAG_GEN_MODEL` | `llama3.2` | generation model (try `llama3.1:8b`, `qwen2.5`, `mistral`, `gemma3n:e2b`) |
 | `RAG_EMBED_MODEL` | `nomic-embed-text` | embedding model |
+| `RAG_HISTORY_TURNS` | `6` | prior Q&A exchanges replayed as conversation context for follow-ups |
+| `RAG_CONDENSE` | `1` | rewrite a follow-up into a standalone query before retrieval (`0` = off; one extra LLM call) |
 | `RAG_EMBED_DOC_PREFIX` | `search_document: ` | task prefix added to documents at index time (set `""` for a model that doesn't use prefixes) |
 | `RAG_EMBED_QUERY_PREFIX` | `search_query: ` | task prefix added to the question at ask time |
 | `RAG_TEMPERATURE` | `0.2` | generation sampling temp — low = consistent, grounded answers (set `0` for fully deterministic) |

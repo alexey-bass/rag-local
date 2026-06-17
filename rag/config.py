@@ -29,6 +29,13 @@ CHUNK_OVERLAP = int(os.environ.get("RAG_CHUNK_OVERLAP", "480"))  # overlap betwe
 TOP_K = int(os.environ.get("RAG_TOP_K", "5"))                  # chunks returned per question
 GEN_TEMPERATURE = float(os.environ.get("RAG_TEMPERATURE", "0.2"))  # low = consistent, grounded answers
 
+# Conversational memory. The front-ends carry the running conversation (the browser thread,
+# the REPL loop) and replay the last HISTORY_TURNS exchanges so follow-ups stay in context.
+# CONDENSE rewrites a follow-up into a standalone query *before* retrieval (one extra LLM call)
+# so "what about its salary?" still retrieves the right chunks; set RAG_CONDENSE=0 to skip it.
+HISTORY_TURNS = int(os.environ.get("RAG_HISTORY_TURNS", "6"))       # prior Q&A exchanges kept as context
+CONDENSE = os.environ.get("RAG_CONDENSE", "1").lower() not in ("0", "false", "no", "")
+
 # Hybrid retrieval: blend dense (embedding) ranking with lexical BM25 ranking via
 # Reciprocal Rank Fusion. Dense captures meaning; BM25 nails exact tokens — company
 # names, locations, tech/version strings — where embeddings are weakest. RAG_HYBRID=0

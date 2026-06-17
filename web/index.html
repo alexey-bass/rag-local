@@ -175,6 +175,7 @@
         <span class="mark"><span class="sq"></span>rag1</span>
         <span class="tag">local&nbsp;retrieval</span>
         <button class="toggle" id="ingestToggle" aria-expanded="false">＋ Ingest</button>
+        <button class="toggle" id="newChat" title="Clear the conversation and start fresh" hidden>⟲ New</button>
         <span class="status" id="pill" title=""><span class="dot off" id="dot"></span><span id="pillText">connecting</span></span>
       </div>
       <div class="meta" id="meta" hidden></div>
@@ -228,10 +229,12 @@ const qBox=$('q'), askBtn=$('askBtn');
 const pathBox=$('path'), replaceBox=$('replace'), ingestBtn=$('ingestBtn'), ingestLog=$('ingestLog');
 const ingestToggle=$('ingestToggle'), ingestPanel=$('ingestPanel');
 const previewBtn=$('previewBtn'), chunkSize=$('chunkSize'), chunkOverlap=$('chunkOverlap');
-const analyzeBtn=$('analyzeBtn'), analyzeOut=$('analyzeOut');
+const analyzeBtn=$('analyzeBtn'), analyzeOut=$('analyzeOut'), newChat=$('newChat');
 
 const escapeHtml = (s) => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const emptyHTML = hint ? hint.outerHTML : '';  // stashed so "New" can restore the empty state
 
+let history = [];   // running conversation [{question, answer}], sent so follow-ups have context
 let busy = false;
 function setBusy(b){ busy=b; askBtn.disabled=b; ingestBtn.disabled=b; previewBtn.disabled=b; analyzeBtn.disabled=b; askBtn.textContent=b?'…':'Ask'; }
 
@@ -290,10 +293,11 @@ function autoSize(){ qBox.style.height='auto'; qBox.style.height=Math.min(qBox.s
 qBox.addEventListener('input',autoSize);
 qBox.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); ask(); }});
 askBtn.addEventListener('click',ask);
+newChat.addEventListener('click',()=>{ if(busy) return; wrap.innerHTML=emptyHTML; history=[]; newChat.hidden=true; scrollDown(); });
 
 async function ask(){
   const question=qBox.value.trim(); if(!question||busy) return;
-  if(hint) hint.remove();
+  const emptyEl=wrap.querySelector('.empty'); if(emptyEl) emptyEl.remove();
   qBox.value=''; autoSize(); setBusy(true);
 
   const xch=document.createElement('div'); xch.className='xch';
@@ -303,14 +307,16 @@ async function ask(){
   const aEl=xch.querySelector('.a'), caret=aEl.querySelector('.caret'); let raw='';
   scrollDown();
 
-  await streamPost('/api/ask',{question},(evt)=>{
+  let errored=false;
+  await streamPost('/api/ask',{question, history: history.slice(-12)},(evt)=>{
     if(evt.type==='sources'){ xch.appendChild(renderSources(evt.sources)); }
     else if(evt.type==='token'){ raw+=evt.text; caret.insertAdjacentText('beforebegin',evt.text); scrollDown(); }
-    else if(evt.type==='error'){ aEl.classList.add('err'); aEl.textContent=evt.message; }
+    else if(evt.type==='error'){ errored=true; aEl.classList.add('err'); aEl.textContent=evt.message; }
     else if(evt.type==='done'){ caret.remove(); enhanceCitations(aEl,raw,xch); }
-  }).catch(e=>{ aEl.classList.add('err'); aEl.textContent=String(e); });
+  }).catch(e=>{ errored=true; aEl.classList.add('err'); aEl.textContent=String(e); });
 
   if(caret.isConnected) caret.remove();
+  if(!errored && raw.trim()){ history.push({question, answer:raw}); newChat.hidden=false; }  // remember this turn
   setBusy(false); refreshStatus(); scrollDown();
 }
 

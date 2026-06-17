@@ -17,7 +17,7 @@ from rag import config
 from rag.analysis import analyze_paths
 from rag.indexer import ingest_paths
 from rag.ollama_client import OllamaError, chat_stream, health
-from rag.pipeline import OVERVIEW_PROMPT, SYSTEM_PROMPT, build_user_message, overview_user_message, retrieve
+from rag.pipeline import build_messages, condense_question, overview_messages, retrieve
 from rag.store import VectorStore
 
 WEB_DIR = config.ROOT / "web"
@@ -122,7 +122,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def _handle_ask(self):
         try:
-            question = (self._read_json().get("question") or "").strip()
+            body = self._read_json()
+            question = (body.get("question") or "").strip()
+            history = body.get("history") if isinstance(body.get("history"), list) else []
         except ValueError:
             self._send(400, "text/plain", "Bad request")
             return
@@ -135,24 +137,27 @@ class Handler(BaseHTTPRequestHandler):
             if store is None or len(store) == 0:
                 self._event({"type": "error", "message": "No index yet — ingest a path first."})
                 return
-            hits = retrieve(store, question)
+            # Resolve a follow-up against the conversation before retrieving.
+            standalone = condense_question(history, question)
+            hits = retrieve(store, standalone)
             if not hits:
                 # No passage cleared RAG_MIN_SCORE. Fall back to a computed collection overview
                 # so corpus-level questions ("how many docs?", "what companies?") still work.
                 self._event({"type": "sources", "sources": []})
-                log('ask: "%s" -> no passage match; answering from corpus overview' % question[:80])
-                for piece in chat_stream(OVERVIEW_PROMPT, overview_user_message(store, question)):
+                log('ask: "%s" -> no passage match; answering from corpus overview' % standalone[:80])
+                for piece in chat_stream(overview_messages(store, standalone)):
                     self._event({"type": "token", "text": piece})
                 self._event({"type": "done"})
                 return
-            log('ask: "%s" -> %s' % (question[:80], ", ".join(
+            rewrite = "" if standalone == question else ' (→ "%s")' % standalone[:60]
+            log('ask: "%s"%s -> %s' % (question[:80], rewrite, ", ".join(
                 f"{r['source']}#{r['chunk']}({s:.2f})" for r, s in hits)))
             self._event({"type": "sources", "sources": [
                 {"n": i + 1, "source": rec["source"], "chunk": rec["chunk"],
                  "score": round(score, 3), "text": rec["text"]}
                 for i, (rec, score) in enumerate(hits)
             ]})
-            for piece in chat_stream(SYSTEM_PROMPT, build_user_message(question, hits)):
+            for piece in chat_stream(build_messages(question, hits, history)):
                 self._event({"type": "token", "text": piece})
             self._event({"type": "done"})
         except OllamaError as e:

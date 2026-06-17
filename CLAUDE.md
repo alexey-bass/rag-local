@@ -21,10 +21,12 @@ keys: embeddings *and* generation both run through a local **Ollama** server.
 ## Architecture — one code path, two front-ends
 
 - `rag/config.py` — all settings; every knob is env-overridable (`RAG_*`, `OLLAMA_HOST`).
-- `rag/ollama_client.py` — `embed(texts, prefix="")`, `chat_stream()`, `health()`. Raises
-  `OllamaError` with a user-friendly message. `health()` **never raises** (UI polls it every 60s).
-  `prefix` prepends nomic's task instruction (`search_document: ` / `search_query: `) to each
-  input before sending — it never mutates the caller's stored text.
+- `rag/ollama_client.py` — `embed(texts, prefix="")`, `chat_stream(messages)`, `chat(messages)`,
+  `health()`. Raises `OllamaError` with a user-friendly message. `health()` **never raises** (UI
+  polls it every 60s). `prefix` prepends nomic's task instruction (`search_document: ` /
+  `search_query: `) to each input before sending — it never mutates the caller's stored text.
+  `chat_stream`/`chat` take a full `messages` list (`[{role, content}, …]`); `chat` is the
+  non-streaming variant (joins the stream) used for short internal calls like query condensing.
 - `rag/loader.py` — `load_documents(paths)`: file or dir (recursive), `.txt/.md/.pdf`.
   Returns dicts `{path (absolute), source (display label), text}`.
 - `rag/chunker.py` — **context-anchored, structure-aware** chunking: every chunk is prefixed
@@ -40,9 +42,11 @@ keys: embeddings *and* generation both run through a local **Ollama** server.
   top companies) used to answer aggregate/meta questions semantic search can't.
 - `rag/pipeline.py` — `retrieve()`: embeds the question with `EMBED_QUERY_PREFIX`, gates on
   `MIN_SCORE` (best hit → else corpus fallback), fuses dense + BM25 via RRF when `HYBRID`,
-  trims the tail by `MIN_SCORE_RATIO`. Also `build_user_message()`, `SYSTEM_PROMPT`,
-  `OVERVIEW_PROMPT` + `overview_user_message()`. **Shared** by `ask.py` and `serve.py`.
-  Change retrieval/prompt logic HERE, not in a front-end.
+  trims the tail by `MIN_SCORE_RATIO`. Conversational memory: `condense_question(history, q)`
+  rewrites a follow-up into a standalone query for retrieval; `build_messages(q, hits, history)`
+  assembles system + prior turns + the current grounded turn; `overview_messages()` for the
+  fallback. Plus `build_user_message()`, `SYSTEM_PROMPT`, `OVERVIEW_PROMPT`. **Shared** by
+  `ask.py` and `serve.py`. Change retrieval/prompt logic HERE, not in a front-end.
 - `rag/indexer.py` — `ingest_paths(paths, replace, emit, chunk_size, chunk_overlap, dry_run)`:
   load → chunk → embed → upsert → save. `dry_run` scans + chunks + reports counts without
   embedding/saving; `chunk_size`/`chunk_overlap` override defaults per run. **Shared** by
@@ -87,6 +91,10 @@ keys: embeddings *and* generation both run through a local **Ollama** server.
   `chunked`, `embed`, `sources`, `token`, `done`, `error`. The browser reads it via
   `fetch().body.getReader()`; keep new events line-delimited. `/api/analyze` is the exception —
   it returns a **single plain JSON** object (analysis is fast and has no progress to stream).
+- **Conversational memory lives in the front-end, not the server.** `/api/ask` accepts a
+  `history` list (`[{question, answer}, …]`) sent by the caller (browser thread / REPL loop);
+  the server stays stateless. The last `HISTORY_TURNS` are replayed to the model and used to
+  condense follow-ups. **⟲ New** (UI) / `new` (REPL) just clears the caller's history.
 
 ## Running
 

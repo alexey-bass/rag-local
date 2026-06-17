@@ -8,7 +8,7 @@ import numpy as np
 from . import config
 from .corpus import corpus_overview
 from .lexical import BM25, rrf, tokenize
-from .ollama_client import embed
+from .ollama_client import OllamaError, chat, embed
 
 SYSTEM_PROMPT = (
     "You answer questions about the user's own documents, using the numbered context "
@@ -109,3 +109,61 @@ OVERVIEW_PROMPT = (
 def overview_user_message(store, question):
     """Fallback context for corpus-level questions when no passage clears the score floor."""
     return f"Collection overview:\n{corpus_overview(store)}\n\n---\nQuestion: {question}"
+
+
+# ── conversational memory ────────────────────────────────────────────────────
+# `history` is a list of {"question", "answer"} dicts, oldest first — the running
+# conversation, carried by the front-end (browser thread / REPL loop), not the server.
+
+def _recent(history):
+    turns = [t for t in (history or []) if (t.get("question") or "").strip() and (t.get("answer") or "").strip()]
+    return turns[-config.HISTORY_TURNS:]
+
+
+def build_messages(question, hits, history=None):
+    """Assemble the chat messages for a grounded answer: system + prior turns + this turn.
+
+    Only the current turn carries the retrieved context block; prior turns are kept as plain
+    Q&A so the model can resolve references ("it", "that role") without bloating the prompt.
+    """
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    for turn in _recent(history):
+        messages.append({"role": "user", "content": turn["question"]})
+        messages.append({"role": "assistant", "content": turn["answer"]})
+    messages.append({"role": "user", "content": build_user_message(question, hits)})
+    return messages
+
+
+def overview_messages(store, question):
+    """Chat messages for the corpus-overview fallback (single turn — no history needed)."""
+    return [
+        {"role": "system", "content": OVERVIEW_PROMPT},
+        {"role": "user", "content": overview_user_message(store, question)},
+    ]
+
+
+CONDENSE_PROMPT = (
+    "You rewrite a follow-up question into a standalone one. Using the conversation so far, "
+    "resolve any pronouns or ellipsis (it, that role, the company…) and output a single "
+    "self-contained question that means the same thing on its own. Output ONLY the rewritten "
+    "question — no preamble, no quotes. If it is already standalone, return it unchanged."
+)
+
+
+def condense_question(history, question):
+    """Rewrite a follow-up into a standalone query using the conversation, for retrieval.
+
+    No-ops (returns the question unchanged) when there's no usable history, when CONDENSE is
+    off, or if the rewrite fails or looks unreasonable — retrieval then just uses the raw text.
+    """
+    turns = _recent(history)
+    if not config.CONDENSE or not turns:
+        return question
+    convo = "\n".join(f"User: {t['question']}\nAssistant: {t['answer']}" for t in turns)
+    user = f"Conversation so far:\n{convo}\n\nFollow-up question: {question}\n\nStandalone question:"
+    try:
+        out = chat([{"role": "system", "content": CONDENSE_PROMPT}, {"role": "user", "content": user}])
+    except OllamaError:
+        return question
+    out = out.strip().strip('"').strip()
+    return out if 0 < len(out) <= 400 else question

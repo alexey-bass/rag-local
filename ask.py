@@ -11,27 +11,35 @@ import sys
 
 from rag import config
 from rag.ollama_client import OllamaError, chat_stream
-from rag.pipeline import OVERVIEW_PROMPT, SYSTEM_PROMPT, build_user_message, overview_user_message, retrieve
+from rag.pipeline import build_messages, condense_question, overview_messages, retrieve
 from rag.store import VectorStore
 
 
-def answer(store, question):
+def answer(store, question, history=None):
+    """Answer a question (streamed to stdout) and return the full answer text.
+
+    `history` is the running list of {question, answer} turns (REPL only); it lets a
+    follow-up resolve against earlier ones. Returns the answer so the caller can append it.
+    """
     if len(store) == 0:
         print("The index is empty. Run `python ingest.py` first.")
-        return
-    hits = retrieve(store, question)
+        return ""
+
+    standalone = condense_question(history, question)
+    hits = retrieve(store, standalone)
+    text = ""
+    print()
     if not hits:
         # No passage matched — answer corpus-level questions from a computed overview.
-        print()
-        for piece in chat_stream(OVERVIEW_PROMPT, overview_user_message(store, question)):
+        for piece in chat_stream(overview_messages(store, standalone)):
             print(piece, end="", flush=True)
+            text += piece
         print("\n")
-        return
+        return text
 
-    user_msg = build_user_message(question, hits)
-    print()
-    for piece in chat_stream(SYSTEM_PROMPT, user_msg):
+    for piece in chat_stream(build_messages(question, hits, history)):
         print(piece, end="", flush=True)
+        text += piece
     print("\n")
 
     sources = []
@@ -40,6 +48,7 @@ def answer(store, question):
         if tag not in sources:
             sources.append(tag)
     print("Sources: " + ", ".join(sources))
+    return text
 
 
 def main():
@@ -52,10 +61,11 @@ def main():
     print(f"Loaded index: {len(store)} chunks  |  gen model: {config.GEN_MODEL}")
 
     if len(sys.argv) > 1:
-        answer(store, " ".join(sys.argv[1:]))
+        answer(store, " ".join(sys.argv[1:]))  # one-shot: no conversation
         return 0
 
-    print('Ask a question (or "exit" to quit).')
+    print('Ask a question (follow-ups welcome · "new" clears the thread · "exit" to quit).')
+    history = []  # running conversation, so follow-ups resolve against earlier turns
     while True:
         try:
             q = input("\n> ").strip()
@@ -66,7 +76,12 @@ def main():
             continue
         if q.lower() in {"exit", "quit", ":q"}:
             break
-        answer(store, q)
+        if q.lower() in {"new", "reset", "clear"}:
+            history = []
+            print("(new conversation)")
+            continue
+        text = answer(store, q, history)
+        history.append({"question": q, "answer": text})
     return 0
 
 
