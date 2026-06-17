@@ -105,8 +105,9 @@ export RAG_GEN_MODEL=llama3.2      # see "Choosing a generation model" for more 
 .venv/bin/python serve.py          # → http://127.0.0.1:8000
 ```
 
-Open the page, **paste a file or folder path** (searched recursively), click **Ingest**,
-then ask questions. It binds to `127.0.0.1` only. Features:
+Open the page, **paste a file, folder, or glob path** (folders searched recursively; a glob
+like `…/offers/2606*` matches files and folders), click **Ingest**, then ask questions. It
+binds to `127.0.0.1` only. Features:
 
 - **Streaming answers** with clickable `[1]`/`[2]` citation chips that jump to the source.
 - **Conversational follow-ups** — the thread is remembered, so "what about its salary?" resolves
@@ -142,6 +143,10 @@ Run `serve.py` in a terminal to watch them live.
 # Ingest a folder (recursive) or a single file you point at:
 .venv/bin/python ingest.py ~/Documents/notes
 .venv/bin/python ingest.py ~/papers/paper.pdf ~/wiki
+
+# Globs work too — quote them so rag1 expands the * (matches files AND folders, recursively):
+.venv/bin/python ingest.py "~/papers/*.pdf"
+.venv/bin/python ingest.py "~/jobs/offers/2606*"     # every file under each matching folder
 
 # ...or just drop files into data/ and run with no arguments:
 .venv/bin/python ingest.py

@@ -182,7 +182,8 @@
       <div class="ingest-panel" id="ingestPanel">
         <div class="ingest">
           <input type="text" id="path" autocomplete="off" spellcheck="false"
-                 placeholder="Paste a file or folder path (recursive) — e.g. ~/Documents/offers or ~/papers/x.pdf">
+                 title="A file, a folder (searched recursively), or a glob with * — e.g. ~/papers/*.pdf or …/offers/2606* (matches folders too). Read-only; only .txt/.md/.pdf are indexed."
+                 placeholder="File, folder, or glob — e.g. ~/Documents/offers, ~/papers/x.pdf, or …/offers/2606*">
         </div>
         <div class="ingest-opts">
           <label title="Chunk size — how many characters of document text go into each indexed piece.&#10;Smaller = more precise matches, but one answer gets split across several pieces.&#10;Larger = whole sections stay together, but each piece matches less precisely.&#10;Blank = default (3200). Click Analyze for a size tuned to your docs."><span class="help">chunk</span> <input type="number" id="chunkSize" placeholder="3200" min="100" max="8000"></label>

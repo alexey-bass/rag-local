@@ -32,8 +32,9 @@ model via `RAG_GEN_MODEL` — so it can run 100% offline when you want.
   `search_query: `) to each input before sending — it never mutates the caller's stored text.
   `chat_stream`/`chat` take a full `messages` list (`[{role, content}, …]`); `chat` is the
   non-streaming variant (joins the stream) used for short internal calls like query condensing.
-- `rag/loader.py` — `load_documents(paths)`: file or dir (recursive), `.txt/.md/.pdf`.
-  Returns dicts `{path (absolute), source (display label), text}`.
+- `rag/loader.py` — `load_documents(paths)`: file, dir (recursive), or **glob** (`*`/`**`,
+  matches files *and* dirs — dirs are walked), `.txt/.md/.pdf`. Read-only, dedupes by absolute
+  path, skips unreadable entries. Returns dicts `{path (absolute), source (display label), text}`.
 - `rag/chunker.py` — **context-anchored, structure-aware** chunking: every chunk is prefixed
   with the document's identity (title + Company/Location/Track parsed from the front-matter)
   and split on line boundaries (no mid-word cuts). This is what makes entity/field queries work.
